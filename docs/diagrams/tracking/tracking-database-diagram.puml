@@ -5,23 +5,38 @@ title QualiTrack - Tracking Database Diagram
 hide methods
 hide stereotypes
 
-entity "equipment_telemetry" {
+entity "environmental_profiles" {
   * id : BIGINT PK
   --
   created_at : DATETIME NOT NULL
   updated_at : DATETIME NOT NULL
-  equipment_id : BIGINT NOT NULL UNIQUE
+  laboratory_id : BIGINT NOT NULL
+  scope : VARCHAR(30) NOT NULL
+  environment_id : BIGINT NULL UNIQUE
+  device_id : BIGINT NULL UNIQUE
+  version : BIGINT NOT NULL
+  configured_by : BIGINT NULL
+  configured_at : DATETIME NULL
 }
 
-entity "equipment_telemetry_statuses" {
-  * id : BIGINT PK
+entity "environmental_profile_thresholds" {
+  * profile_id : BIGINT PK, FK
+  * position : INT PK
   --
-  created_at : DATETIME NOT NULL
-  updated_at : DATETIME NOT NULL
-  equipment_id : BIGINT NOT NULL
-  is_online : BOOLEAN NOT NULL
-  current_status : VARCHAR(40) NOT NULL
-  last_heartbeat : VARCHAR(50) NOT NULL
+  metric : VARCHAR(30) NOT NULL
+  normal_min : DOUBLE NULL
+  normal_max : DOUBLE NULL
+  critical_min : DOUBLE NULL
+  critical_max : DOUBLE NULL
+}
+
+entity "environmental_profile_actuation_rules" {
+  * profile_id : BIGINT PK, FK
+  * position : INT PK
+  --
+  metric : VARCHAR(30) NOT NULL
+  state : VARCHAR(20) NOT NULL
+  action : VARCHAR(30) NOT NULL
 }
 
 entity "telemetry_measurements" {
@@ -29,27 +44,53 @@ entity "telemetry_measurements" {
   --
   created_at : DATETIME NOT NULL
   updated_at : DATETIME NOT NULL
+  laboratory_id : BIGINT NULL
+  environment_id : BIGINT NULL
   equipment_id : BIGINT NOT NULL
   parameter_name : VARCHAR(120) NOT NULL
-  value : DOUBLE NOT NULL
+  value : DOUBLE NULL
+  text_value : VARCHAR(120) NULL
   unit : VARCHAR(40) NOT NULL
   timestamp : VARCHAR(50) NOT NULL
+  measured_at : DATETIME NULL
+  state : VARCHAR(20) NULL
+  threshold_value : DOUBLE NULL
+  profile_version : BIGINT NULL
+  --
+  idx_telemetry_measurements_device_time (equipment_id, measured_at)
 }
 
-entity "telemetry_history_points" {
+entity "actuation_events" {
   * id : BIGINT PK
   --
   created_at : DATETIME NOT NULL
   updated_at : DATETIME NOT NULL
-  equipment_id : BIGINT NOT NULL
-  parameter_name : VARCHAR(120) NOT NULL
-  recorded_value : DOUBLE NOT NULL
-  timestamp : VARCHAR(50) NOT NULL
-  is_anomaly : BOOLEAN NOT NULL
+  laboratory_id : BIGINT NOT NULL
+  environment_id : BIGINT NOT NULL
+  device_id : BIGINT NOT NULL
+  action : VARCHAR(30) NOT NULL
+  trigger_metric : VARCHAR(30) NULL
+  trigger_state : VARCHAR(20) NULL
+  result : VARCHAR(20) NOT NULL
+  occurred_at : DATETIME NOT NULL
+  profile_version : BIGINT NULL
+  --
+  idx_actuation_events_device_time (device_id, occurred_at)
 }
 
-equipment_telemetry ||--o{ equipment_telemetry_statuses : equipment_id
-equipment_telemetry ||--o{ telemetry_measurements : equipment_id
-equipment_telemetry ||--o{ telemetry_history_points : equipment_id
+environmental_profiles ||--o{ environmental_profile_thresholds : profile_id
+environmental_profiles ||--o{ environmental_profile_actuation_rules : profile_id
+
+note bottom of environmental_profiles
+  scope ENVIRONMENT: environment_id set (air quality of the environmental device).
+  scope CONTAINER_MONITOR: device_id set (thresholds and actuation rules).
+  laboratory_id, environment_id and device_id reference other bounded
+  contexts by identifier (no foreign key).
+end note
+
+note bottom of telemetry_measurements
+  equipment_id = environmental device or container monitor.
+  value is empty for RFID_TAG readings (text_value keeps the tag).
+end note
 
 @enduml
