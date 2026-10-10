@@ -18,6 +18,7 @@ public class BatchResourceFromEntityAssembler {
         return new BatchResource(
                 entity.getId(),
                 entity.getLabId(),
+                entity.getEnvironmentId(),
                 entity.getProductId(),
                 entity.getProductName(),
                 entity.getBatchNumber(),
@@ -26,7 +27,8 @@ public class BatchResourceFromEntityAssembler {
                 entity.getStatus().name(),
                 entity.getStartDate(),
                 entity.getEndDate(),
-                entity.getNotes()
+                entity.getNotes(),
+                entity.container().map(container -> container.containerMonitorId()).orElse(null)
         );
     }
 }
