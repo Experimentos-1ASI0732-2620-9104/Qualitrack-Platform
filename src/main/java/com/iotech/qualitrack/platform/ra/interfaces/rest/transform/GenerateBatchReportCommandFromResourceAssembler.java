@@ -16,18 +16,19 @@ public final class GenerateBatchReportCommandFromResourceAssembler {
      *
      * @param batchId the batch numeric identifier from the request path
      * @param resource the batch report request resource
+     * @param requestedBy the authenticated user
      * @return the batch report generation command
      */
     public static GenerateBatchReportCommand toCommandFromResource(
             Long batchId,
-            GenerateBatchReportResource resource
+            GenerateBatchReportResource resource,
+            Long requestedBy
     ) {
         return new GenerateBatchReportCommand(
                 batchId,
-                resource.includeTelemetry(),
                 resource.includeDeviations(),
                 resource.format(),
-                resource.requestedBy()
+                requestedBy
         );
     }
 }
