@@ -22,8 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BatchReportPdfTests {
     private final ReportDocumentWriterImpl writer = new ReportDocumentWriterImpl();
     private final List<BatchReportData.Material> materials = List.of(
-            new BatchReportData.Material(1L, "DEMO Paracetamol API", 500.0, "g", "2026-09-01"),
-            new BatchReportData.Material(2L, "DEMO Microcrystalline cellulose", 250.0, "g", "2026-09-01"));
+            new BatchReportData.Material(1L, "DEMO Paracetamol API", 11L, 500.0, "g", "2026-09-01", "1000", "500"),
+            new BatchReportData.Material(2L, "DEMO Microcrystalline cellulose", 12L, 250.0, "g", "2026-09-01", "750", "500"));
     private final List<BatchReportData.Deviation> deviations = List.of(
             new BatchReportData.Deviation(4L, 4L, "Temperature", 9.3, 8.0, "C", "2026-09-05T07:00:00Z", "CRITICAL", "UNRESOLVED", null),
             new BatchReportData.Deviation(5L, 5L, "Temperature", 38.4, 38.0, "C", "2026-09-05T06:00:00Z", "WARNING", "ACKNOWLEDGED", null),
@@ -67,7 +67,7 @@ class BatchReportPdfTests {
     void longTablesAndNotesRemainReadableAndKeepLastRecords() throws Exception {
         var rows = IntStream.rangeClosed(1, 35).mapToObj(index ->
                 new BatchReportData.Material((long) index, "DEMO Material " + index + " - " + "traceability-".repeat(12),
-                        125.5, "milligrams", "2026-09-01")).toList();
+                        (long) index, 125.5, "milligrams", "2026-09-01", "1000", "874.5")).toList();
         var notes = "DEMO: " + "A detailed observation remains part of the exported record. ".repeat(90) + "END-OF-NOTES";
         byte[] bytes = writer.writeBatchPdf(snapshot(rows, deviations, true, notes));
         try (var pdf = Loader.loadPDF(bytes)) {
@@ -81,8 +81,8 @@ class BatchReportPdfTests {
     private BatchReportData snapshot(List<BatchReportData.Material> materials, List<BatchReportData.Deviation> alerts,
                                      boolean included, String notes) {
         return new BatchReportData("Multilab", 5L, "DEMO-BILLY1-LOT1", "DEMO Paracetamol 500 mg",
-                1000.0, "units", "RELEASED", "2026-09-01", "2026-09-03", notes, materials, included,
-                alerts, "Billy1", Instant.parse("2026-09-05T07:16:58Z"));
+                1000.0, "units", "RELEASED", "2026-09-01", "2026-09-03", notes, materials, List.of(), List.of(), null,
+                null, null, included, alerts, "Billy1", Instant.parse("2026-09-05T07:16:58Z"));
     }
 
     private void assertTextInsidePages(PDDocument pdf) throws IOException {
