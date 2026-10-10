@@ -154,10 +154,16 @@ public class SubscriptionCommandServiceImpl implements SubscriptionCommandServic
                         "Subscription is not active"
                 ));
             }
+            if (subscription.isCancelAtPeriodEnd()) {
+                return Result.failure(ApplicationError.conflict(
+                        "Subscription",
+                        "The renewal of the subscription is already cancelled"
+                ));
+            }
 
-            externalStripeService.cancelSubscription(subscription.getStripeSubscriptionId());
+            externalStripeService.cancelRenewal(subscription.getStripeSubscriptionId());
 
-            subscription.cancel(command.cancelledBy(), OffsetDateTime.now().toString());
+            subscription.cancelRenewal(command.cancelledBy(), OffsetDateTime.now().toString());
             var savedSubscription = subscriptionRepository.save(subscription);
 
             eventPublisher.publishEvent(SubscriptionCancelledEvent.from(savedSubscription));
