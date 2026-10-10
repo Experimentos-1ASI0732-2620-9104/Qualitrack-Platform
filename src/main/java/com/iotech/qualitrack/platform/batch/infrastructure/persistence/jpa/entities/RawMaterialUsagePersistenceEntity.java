@@ -44,4 +44,10 @@ public class RawMaterialUsagePersistenceEntity extends AuditableAbstractPersiste
 
     @Column(name = "usage_date", nullable = false, length = 30)
     private String usageDate;
+
+    /**
+     * Idempotency key of the Inventory consumption that produced this usage; null for legacy usages.
+     */
+    @Column(name = "operation_id", length = 100)
+    private String operationId;
 }
