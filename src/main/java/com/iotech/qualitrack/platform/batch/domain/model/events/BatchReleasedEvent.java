@@ -13,27 +13,31 @@ import com.iotech.qualitrack.platform.batch.domain.model.aggregates.Batch;
  * @param productId    The numeric identity of the manufactured product.
  * @param batchNumber  The traceability code assigned to the batch.
  * @param releaseDate  The date when the batch was released.
+ * @param releasedBy   The account of the person who released the batch.
  */
 public record BatchReleasedEvent(
         Long batchId,
         Long laboratoryId,
         Long productId,
         String batchNumber,
-        String releaseDate) {
+        String releaseDate,
+        Long releasedBy) {
 
     /**
      * Convenience factory that extracts all needed fields from a released {@link Batch}.
      *
      * @param batch the released batch
+     * @param releasedBy the account of the person who released it
      * @return a fully populated {@link BatchReleasedEvent}
      */
-    public static BatchReleasedEvent from(Batch batch) {
+    public static BatchReleasedEvent from(Batch batch, Long releasedBy) {
         return new BatchReleasedEvent(
                 batch.getId(),
                 batch.getLabId(),
                 batch.getProductId(),
                 batch.getBatchNumber(),
-                batch.getEndDate()
+                batch.getEndDate(),
+                releasedBy
         );
     }
 }
