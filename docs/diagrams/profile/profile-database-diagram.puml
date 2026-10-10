@@ -1,0 +1,44 @@
+@startuml profile-database-diagram
+title QualiTrack - Profile Database Diagram
+
+skinparam linetype ortho
+skinparam packageStyle rectangle
+hide circle
+
+entity "profiles" as profiles {
+  * id : BIGINT <<PK>>
+  --
+  * created_at : DATETIME
+  * updated_at : DATETIME
+  * user_id : BIGINT
+  full_name : VARCHAR(120)
+  dni : VARCHAR(8)
+  phone_number : VARCHAR(30)
+  location : VARCHAR(120)
+  photo_content_type : VARCHAR(20)
+  photo_size_bytes : INT
+  photo_updated_at : DATETIME(6)
+  --
+  <<UK>> uk_profiles_user (user_id)
+}
+
+entity "profile_photos" as profile_photos {
+  * id : BIGINT <<PK>>
+  --
+  * created_at : DATETIME
+  * updated_at : DATETIME
+  * profile_id : BIGINT
+  * content_type : VARCHAR(20)
+  * content : MEDIUMBLOB
+  --
+  <<UK>> uk_profile_photos_profile (profile_id)
+}
+
+profiles ||--o| profile_photos : "profile_id"
+
+note right of profiles
+  user_id references the IAM account (iam_users.id).
+  The photo columns describe the image kept in profile_photos.
+end note
+
+@enduml

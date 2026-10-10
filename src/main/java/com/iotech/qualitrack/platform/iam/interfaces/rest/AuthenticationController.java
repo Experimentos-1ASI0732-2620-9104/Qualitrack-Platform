@@ -9,10 +9,10 @@ import com.iotech.qualitrack.platform.iam.interfaces.rest.transform.SignUpComman
 import com.iotech.qualitrack.platform.iam.interfaces.rest.transform.UserResourceFromEntityAssembler;
 import com.iotech.qualitrack.platform.shared.interfaces.rest.transform.ResponseEntityAssembler;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
@@ -21,7 +21,6 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
  */
 @RestController
 @RequestMapping(value = "/api/v1/authentication", produces = APPLICATION_JSON_VALUE)
-@Tag(name = "Authentication", description = "Authentication and user registration endpoints")
 public class AuthenticationController {
 
     private final UserCommandService userCommandService;
@@ -44,15 +43,16 @@ public class AuthenticationController {
     }
 
     @PostMapping("/sign-up")
-    @Operation(summary = "User sign-up", description = "Registers a new IAM user account.")
+    @Operation(summary = "User sign-up", description = "Registers a new IAM user account (TS03). The Location header points to the new user.")
     public ResponseEntity<?> signUp(@RequestBody SignUpResource resource) {
         var command = SignUpCommandFromResourceAssembler.toCommandFromResource(resource);
         var result = userCommandService.handle(command);
 
-        return ResponseEntityAssembler.toResponseEntityFromResult(
+        return ResponseEntityAssembler.toCreatedResponseEntityAtLocation(
                 result,
                 UserResourceFromEntityAssembler::toResourceFromEntity,
-                HttpStatus.CREATED
+                user -> ServletUriComponentsBuilder.fromCurrentContextPath()
+                        .path("/api/v1/users/{userId}").buildAndExpand(user.getId()).toUri()
         );
     }
 }

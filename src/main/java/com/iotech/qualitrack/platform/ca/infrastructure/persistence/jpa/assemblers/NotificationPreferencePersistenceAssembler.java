@@ -18,7 +18,6 @@ public final class NotificationPreferencePersistenceAssembler {
                 entity.getId(),
                 entity.getUserId(),
                 entity.getEmailEnabled(),
-                entity.getSmsEnabled(),
                 entity.getInAppEnabled(),
                 entity.getMinimumSeverity()
         );
@@ -35,7 +34,6 @@ public final class NotificationPreferencePersistenceAssembler {
 
         entity.setUserId(preference.getUserId());
         entity.setEmailEnabled(preference.getEmailEnabled());
-        entity.setSmsEnabled(preference.getSmsEnabled());
         entity.setInAppEnabled(preference.getInAppEnabled());
         entity.setMinimumSeverity(preference.getMinimumSeverity());
 

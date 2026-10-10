@@ -1,7 +1,9 @@
 package com.iotech.qualitrack.platform.ra.application.internal.eventhandlers;
 
+import com.iotech.qualitrack.platform.laboratory.interfaces.events.EnvironmentRegisteredIntegrationEvent;
+import com.iotech.qualitrack.platform.laboratory.interfaces.events.EnvironmentUpdatedIntegrationEvent;
+import com.iotech.qualitrack.platform.laboratory.interfaces.events.EnvironmentUsageAssignedIntegrationEvent;
 import com.iotech.qualitrack.platform.laboratory.interfaces.events.LaboratoryRegisteredIntegrationEvent;
-import com.iotech.qualitrack.platform.laboratory.interfaces.events.ProductCreatedIntegrationEvent;
 import com.iotech.qualitrack.platform.laboratory.interfaces.events.RawMaterialCreatedIntegrationEvent;
 import com.iotech.qualitrack.platform.laboratory.interfaces.events.RawMaterialLowStockIntegrationEvent;
 import com.iotech.qualitrack.platform.laboratory.interfaces.events.StaffDeactivatedIntegrationEvent;
@@ -37,19 +39,6 @@ public class LaboratoryAuditEventHandler {
                 AuditAction.REGISTER,
                 "LABORATORY",
                 event.laboratoryId(),
-                currentUser.userId(),
-                event.toString()
-        );
-    }
-
-    @EventListener(ProductCreatedIntegrationEvent.class)
-    public void on(ProductCreatedIntegrationEvent event) {
-        log.info("RA received product created event: {}", event);
-
-        raContextFacade.recordAuditLog(
-                AuditAction.REGISTER,
-                "PHARMACEUTICAL_PRODUCT",
-                event.productId(),
                 currentUser.userId(),
                 event.toString()
         );
@@ -103,6 +92,45 @@ public class LaboratoryAuditEventHandler {
                 "RAW_MATERIAL",
                 event.rawMaterialId(),
                 currentUser.userId(),
+                event.toString()
+        );
+    }
+
+    @EventListener(EnvironmentRegisteredIntegrationEvent.class)
+    public void on(EnvironmentRegisteredIntegrationEvent event) {
+        log.info("RA received environment registered event: {}", event);
+
+        raContextFacade.recordAuditLog(
+                AuditAction.REGISTER,
+                "ENVIRONMENT",
+                event.environmentId(),
+                currentUser.userId(),
+                event.toString()
+        );
+    }
+
+    @EventListener(EnvironmentUpdatedIntegrationEvent.class)
+    public void on(EnvironmentUpdatedIntegrationEvent event) {
+        log.info("RA received environment updated event: {}", event);
+
+        raContextFacade.recordAuditLog(
+                AuditAction.UPDATE,
+                "ENVIRONMENT",
+                event.environmentId(),
+                currentUser.userId(),
+                event.toString()
+        );
+    }
+
+    @EventListener(EnvironmentUsageAssignedIntegrationEvent.class)
+    public void on(EnvironmentUsageAssignedIntegrationEvent event) {
+        log.info("RA received environment usage assigned event: {}", event);
+
+        raContextFacade.recordAuditLog(
+                AuditAction.UPDATE,
+                "ENVIRONMENT",
+                event.environmentId(),
+                event.assignedBy(),
                 event.toString()
         );
     }

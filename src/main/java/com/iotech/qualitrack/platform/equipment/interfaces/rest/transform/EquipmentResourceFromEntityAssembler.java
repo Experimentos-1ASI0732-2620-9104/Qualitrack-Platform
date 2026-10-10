@@ -18,12 +18,15 @@ public class EquipmentResourceFromEntityAssembler {
         return new EquipmentResource(
                 entity.getId(),
                 entity.getLabId(),
+                entity.getEnvironmentId(),
                 entity.getName(),
                 entity.getType().name(),
                 entity.getModel(),
                 entity.getSerialNumber(),
                 entity.getStatus().name(),
-                entity.getSensorExternalId() != null ? entity.getSensorExternalId().value() : null
+                entity.getDeviceType() != null ? entity.getDeviceType().name() : null,
+                entity.getSensorExternalId() != null ? entity.getSensorExternalId().value() : null,
+                entity.getFirmwareVersion()
         );
     }
 }

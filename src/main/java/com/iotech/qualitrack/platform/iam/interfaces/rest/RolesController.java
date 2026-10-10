@@ -5,7 +5,6 @@ import com.iotech.qualitrack.platform.iam.domain.model.queries.GetAllRolesQuery;
 import com.iotech.qualitrack.platform.iam.interfaces.rest.resources.RoleResource;
 import com.iotech.qualitrack.platform.iam.interfaces.rest.transform.RoleResourceFromEntityAssembler;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,7 +17,6 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
  */
 @RestController
 @RequestMapping(value = "/api/v1/roles", produces = APPLICATION_JSON_VALUE)
-@Tag(name = "Roles", description = "IAM role endpoints")
 public class RolesController {
 
     private final RoleQueryService roleQueryService;

@@ -28,7 +28,8 @@ public class EquipmentQueryServiceImpl implements EquipmentQueryService {
 
     @Override
     public Optional<Equipment> handle(GetEquipmentByIdQuery query) {
-        return equipmentRepository.findById(query.equipmentId());
+        return equipmentRepository.findById(query.equipmentId())
+                .filter(equipment -> equipment.belongsTo(query.laboratoryId()));
     }
 
     @Override

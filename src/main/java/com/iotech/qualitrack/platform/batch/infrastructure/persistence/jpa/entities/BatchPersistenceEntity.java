@@ -10,12 +10,12 @@ import lombok.Setter;
 /**
  * JPA persistence entity representing a production Batch table.
  *
- * <p>This class bridges the relational database schema with the application's
- * data access layer. It reflects the structure required by the Angular frontend
- * for batch lifecycle and traceability operations.</p>
+ * <p>The batch number is unique per laboratory. {@code environment_id} is nullable so batches
+ * registered before environments existed keep working until they are assigned to one.</p>
  */
 @Entity
-@Table(name = "batches")
+@Table(name = "batches", uniqueConstraints = @UniqueConstraint(
+        name = "uk_batches_laboratory_batch_number", columnNames = {"laboratory_id", "batch_number"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -24,13 +24,16 @@ public class BatchPersistenceEntity extends AuditableAbstractPersistenceEntity {
     @Column(name = "laboratory_id", nullable = false)
     private Long labId;
 
+    @Column(name = "environment_id")
+    private Long environmentId;
+
     @Column(name = "product_id", nullable = false)
     private Long productId;
 
     @Column(name = "product_name", nullable = false, length = 150)
     private String productName;
 
-    @Column(name = "batch_number", nullable = false, length = 50, unique = true)
+    @Column(name = "batch_number", nullable = false, length = 50)
     private String batchNumber;
 
     @Column(nullable = false)
@@ -53,4 +56,19 @@ public class BatchPersistenceEntity extends AuditableAbstractPersistenceEntity {
 
     @Column(length = 500)
     private String notes;
+
+    /**
+     * Container monitor of the monitored container where the batch is stored (US78).
+     */
+    @Column(name = "container_monitor_id")
+    private Long containerMonitorId;
+
+    @Column(name = "container_environment_id")
+    private Long containerEnvironmentId;
+
+    @Column(name = "container_assigned_by")
+    private Long containerAssignedBy;
+
+    @Column(name = "container_assigned_at")
+    private java.time.Instant containerAssignedAt;
 }

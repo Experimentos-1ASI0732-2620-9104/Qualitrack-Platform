@@ -12,7 +12,6 @@ import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertSeverity
  * @param preferenceId The numeric identity of the notification preference record.
  * @param userId The numeric identity of the user who owns the preferences.
  * @param emailEnabled Whether email notifications are enabled.
- * @param smsEnabled Whether SMS notifications are enabled.
  * @param inAppEnabled Whether in-app notifications are enabled.
  * @param minimumSeverity The minimum severity required to notify the user.
  */
@@ -20,7 +19,6 @@ public record NotificationPreferenceUpdatedEvent(
         Long preferenceId,
         Long userId,
         Boolean emailEnabled,
-        Boolean smsEnabled,
         Boolean inAppEnabled,
         AlertSeverity minimumSeverity
 ) {
@@ -35,7 +33,6 @@ public record NotificationPreferenceUpdatedEvent(
                 preference.getId(),
                 preference.getUserId(),
                 preference.getEmailEnabled(),
-                preference.getSmsEnabled(),
                 preference.getInAppEnabled(),
                 preference.getMinimumSeverity()
         );

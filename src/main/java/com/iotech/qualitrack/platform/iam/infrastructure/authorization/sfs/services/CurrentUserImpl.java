@@ -13,4 +13,12 @@ public class CurrentUserImpl implements CurrentUser {
         return authentication != null && authentication.getPrincipal() instanceof UserDetailsImpl user
                 ? user.getId() : null;
     }
+
+    @Override
+    public boolean hasAnyAuthority(String... authorities) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) return false;
+        var wanted = java.util.Set.of(authorities);
+        return authentication.getAuthorities().stream().anyMatch(granted -> wanted.contains(granted.getAuthority()));
+    }
 }

@@ -4,6 +4,7 @@ import com.iotech.qualitrack.platform.iam.infrastructure.persistence.jpa.entitie
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -19,4 +20,10 @@ public interface UserPersistenceRepository extends JpaRepository<UserPersistence
     Optional<UserPersistenceEntity> findByUsername(String username);
 
     boolean existsByUsername(String username);
+
+    Optional<UserPersistenceEntity> findByEmail(String email);
+
+    boolean existsByEmail(String email);
+
+    List<UserPersistenceEntity> findByLaboratoryId(Long laboratoryId);
 }

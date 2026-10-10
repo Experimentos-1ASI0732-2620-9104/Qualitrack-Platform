@@ -26,6 +26,13 @@ public class InventoryRepositoryImpl implements InventoryRepository {
         return materials.findAllByLaboratoryIdOrderByName(laboratoryId).stream()
             .map(InventoryMaterialPersistenceAssembler::toDomainFromPersistence).toList();
     }
+    public List<RawMaterial> materials(Long laboratoryId, Long environmentId) {
+        return materials.findAllByLaboratoryIdAndEnvironmentIdOrderByName(laboratoryId, environmentId).stream()
+            .map(InventoryMaterialPersistenceAssembler::toDomainFromPersistence).toList();
+    }
+    public Optional<RawMaterial> materialById(Long id) {
+        return materials.findById(id).map(InventoryMaterialPersistenceAssembler::toDomainFromPersistence);
+    }
     public Optional<RawMaterial> material(Long lab, Long id, boolean lock) {
         return (lock ? materials.findForUpdate(lab, id) : materials.findByLaboratoryIdAndId(lab, id))
             .map(InventoryMaterialPersistenceAssembler::toDomainFromPersistence);
@@ -50,6 +57,13 @@ public class InventoryRepositoryImpl implements InventoryRepository {
     public Optional<RawMaterialBatch> receipt(Long lab, Long id, boolean lock) {
         return (lock ? receipts.findForUpdate(lab, id) : receipts.findByLaboratoryIdAndId(lab, id))
             .map(InventoryReceiptPersistenceAssembler::toDomainFromPersistence);
+    }
+    public Optional<RawMaterialBatch> receiptById(Long id) {
+        return receipts.findById(id).map(InventoryReceiptPersistenceAssembler::toDomainFromPersistence);
+    }
+    public List<RawMaterialBatch> environmentReceipts(Long lab, Long environment) {
+        return receipts.findAllInEnvironment(lab, environment).stream()
+            .map(InventoryReceiptPersistenceAssembler::toDomainFromPersistence).toList();
     }
     public RawMaterialBatch saveReceipt(RawMaterialBatch receipt) {
         return InventoryReceiptPersistenceAssembler.toDomainFromPersistence(

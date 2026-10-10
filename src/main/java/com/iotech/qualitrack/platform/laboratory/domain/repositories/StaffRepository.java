@@ -21,5 +21,11 @@ public interface StaffRepository {
 
     boolean existsByEmail(String email);
 
+    /**
+     * @param userId the sign-in account of the staff member
+     * @return the staff member that uses the account
+     */
+    Optional<StaffMember> findByUserId(Long userId);
+
     void deleteById(Long id);
 }

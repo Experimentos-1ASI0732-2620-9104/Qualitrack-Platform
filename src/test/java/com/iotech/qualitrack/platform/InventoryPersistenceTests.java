@@ -6,7 +6,8 @@ import com.iotech.qualitrack.platform.inventory.application.queryservices.Invent
 import com.iotech.qualitrack.platform.inventory.domain.model.commands.*;
 import com.iotech.qualitrack.platform.inventory.domain.model.queries.*;
 import com.iotech.qualitrack.platform.inventory.interfaces.acl.InventoryContextFacade;
-import com.iotech.qualitrack.platform.inventory.interfaces.rest.InventoryController;
+import com.iotech.qualitrack.platform.inventory.application.internal.outboundservices.acl.InventoryExternalLaboratoryService;
+import com.iotech.qualitrack.platform.inventory.interfaces.rest.EnvironmentInventoryController;
 import com.iotech.qualitrack.platform.inventory.interfaces.rest.resources.ReviewRawMaterialBatchResource;
 import com.iotech.qualitrack.platform.inventory.domain.model.aggregates.RawMaterialBatch;
 import com.iotech.qualitrack.platform.inventory.domain.model.valueobjects.RawMaterialBatchStatus;
@@ -33,14 +34,15 @@ class InventoryPersistenceTests {
     @Autowired InventoryContextFacade inventory;
     @Autowired InventoryCommandService commands;
     @Autowired InventoryQueryService queries;
-    @Autowired InventoryController controller;
-    @Autowired java.time.Clock clock;
+    @Autowired EnvironmentInventoryController controller;
+    @Autowired @org.springframework.beans.factory.annotation.Qualifier("inventoryClock") java.time.Clock clock;
     private LocalDate today() { return LocalDate.now(clock); }
     @Autowired InventoryImportService imports;
     @Autowired BatchRepository batches;
     @Autowired RawMaterialRepository legacy;
     @MockitoSpyBean RawMaterialUsageRepository usages;
     @MockitoBean CurrentUser actor;
+    @MockitoBean InventoryExternalLaboratoryService laboratories;
 
     @AfterEach void clearAuthentication() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
@@ -58,20 +60,20 @@ class InventoryPersistenceTests {
         var receipt = receive("kg", "100");
         var resource = new ReviewRawMaterialBatchResource(RawMaterialBatchStatus.RELEASED, "Certificate checked");
         authenticate(42L, "ROLE_LAB_OPERATOR");
-        assertThatThrownBy(() -> controller.review(42L, receipt.getId(), resource))
+        assertThatThrownBy(() -> controller.reviewBatch(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), resource))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         authenticate(43L, "ROLE_QA_MANAGER");
-        assertThatThrownBy(() -> controller.review(42L, receipt.getId(), resource))
+        assertThatThrownBy(() -> controller.reviewBatch(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), resource))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         authenticate(42L, "ROLE_QA_MANAGER");
-        assertThat(controller.review(42L, receipt.getId(), resource).getStatusCode().value()).isEqualTo(200);
-        assertThat(queries.handle(new GetMaterialMovementsQuery(42L, receipt.getRawMaterialId())))
+        assertThat(controller.reviewBatch(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), resource).getStatusCode().value()).isEqualTo(201);
+        assertThat(queries.handle(new GetRawMaterialMovementsQuery(42L, 1L, receipt.getRawMaterialId())))
             .filteredOn(movement -> movement.type().equals("REVIEW")).hasSize(1);
     }
 
     @Test void simultaneousRetriesRecordOnlyOneConsumption() throws Exception {
         var receipt = receive("kg", "100");
-        commands.handle(new ReviewRawMaterialBatchCommand(42L, receipt.getId(), RawMaterialBatchStatus.RELEASED, "Reviewed"));
+        commands.handle(new ReviewRawMaterialBatchCommand(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), RawMaterialBatchStatus.RELEASED, "Reviewed"));
         var request = request(receipt, batch(42, BatchStatus.IN_PROGRESS), "50", UUID.randomUUID().toString());
         var start = new java.util.concurrent.CountDownLatch(1);
         try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
@@ -86,18 +88,25 @@ class InventoryPersistenceTests {
                 .isEqualTo(second.get(10, java.util.concurrent.TimeUnit.SECONDS));
         }
         assertThat(usages.findAllByBatchId(request.productBatchId())).hasSize(1);
-        assertThat(queries.handle(new GetMaterialReceiptsQuery(42L, receipt.getRawMaterialId()))
+        assertThat(queries.handle(new GetRawMaterialBatchesQuery(42L, 1L, receipt.getRawMaterialId()))
             .getFirst().getAvailableAmount()).isEqualByComparingTo("50");
     }
 
-    @BeforeEach void actor() { when(actor.userId()).thenReturn(27L); }
+    @BeforeEach void actor() {
+        when(actor.userId()).thenReturn(27L);
+        when(laboratories.existsEnvironment(42L, 1L)).thenReturn(true);
+    }
     private RawMaterialBatch receive(String unit, String amount) {
-        var material = commands.handle(new SaveRawMaterialCommand(42L, null, "RM-" + UUID.randomUUID(), "Fixture", unit, BigDecimal.TEN)).toOptional().orElseThrow();
-        return commands.handle(new ReceiveRawMaterialBatchCommand(42L, material.getId(), "Supplier", "SUP-1", unit,
+        var material = commands.handle(new SaveRawMaterialCommand(42L, 1L, null, "RM-" + UUID.randomUUID(), "Fixture", unit, BigDecimal.TEN)).toOptional().orElseThrow();
+        return commands.handle(new ReceiveRawMaterialBatchCommand(42L, 1L, material.getId(), "Supplier", "SUP-1", unit,
             new BigDecimal(amount), today().minusDays(1), today().plusYears(1))).toOptional().orElseThrow();
     }
+    private BigDecimal usableStock(Long materialId) {
+        return inventory.findInventory(42L, 1L).stream().filter(material -> material.id().equals(materialId))
+            .findFirst().map(InventoryContextFacade.InventoryMaterial::usableStock).orElse(BigDecimal.ZERO);
+    }
     private long batch(long lab, BatchStatus status) {
-        return batches.save(new Batch(null, lab, 1L, "Fixture", "B-" + UUID.randomUUID(), 10.0,
+        return batches.save(new Batch(null, lab, 1L, 1L, "Fixture", "B-" + UUID.randomUUID(), 10.0,
             "units", status, LocalDate.now().toString(), null, "Test")).getId();
     }
     private ConsumptionRequest request(RawMaterialBatch receipt, long batch, String amount, String operation) {
@@ -107,19 +116,19 @@ class InventoryPersistenceTests {
     @Test void quarantineReviewConsumptionAndAffectedBatchHistoryPersist() {
         var receipt = receive("kg", "100");
         long batch = batch(42, BatchStatus.IN_PROGRESS);
-        assertThat(inventory.findUsableReceipts(42L, receipt.getRawMaterialId(), today())).isEmpty();
+        assertThat(usableStock(receipt.getRawMaterialId())).isZero();
         assertThatThrownBy(() -> inventory.consume(request(receipt, batch, "50", "blocked-" + UUID.randomUUID())))
             .satisfies(error -> assertThat(((com.iotech.qualitrack.platform.shared.application.result.ApplicationException) error).error().details()).contains("not available"));
-        commands.handle(new ReviewRawMaterialBatchCommand(42L, receipt.getId(), RawMaterialBatchStatus.RELEASED, "Certificate checked")).toOptional().orElseThrow();
+        commands.handle(new ReviewRawMaterialBatchCommand(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), RawMaterialBatchStatus.RELEASED, "Certificate checked")).toOptional().orElseThrow();
         var consumed = inventory.consume(request(receipt, batch, "50", UUID.randomUUID().toString()));
         assertThat(consumed.stockAfter()).isEqualByComparingTo("50");
         assertThat(usages.findAllByBatchId(batch)).singleElement().satisfies(usage -> {
             assertThat(usage.getInventoryReceiptId()).isEqualTo(receipt.getId());
             assertThat(usage.getStockAfter()).isEqualByComparingTo("50");
         });
-        commands.handle(new ReviewRawMaterialBatchCommand(42L, receipt.getId(), RawMaterialBatchStatus.OBSERVED, "Supplier warning received")).toOptional().orElseThrow();
-        assertThat(inventory.findUsableReceipts(42L, receipt.getRawMaterialId(), today())).isEmpty();
-        assertThat(queries.handle(new GetMaterialMovementsQuery(42L, receipt.getRawMaterialId()))).anySatisfy(movement -> {
+        commands.handle(new ReviewRawMaterialBatchCommand(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), RawMaterialBatchStatus.OBSERVED, "Supplier warning received")).toOptional().orElseThrow();
+        assertThat(usableStock(receipt.getRawMaterialId())).isZero();
+        assertThat(queries.handle(new GetRawMaterialMovementsQuery(42L, 1L, receipt.getRawMaterialId()))).anySatisfy(movement -> {
             assertThat(movement.productBatchId()).isEqualTo(batch);
             assertThat(movement.amount()).isEqualByComparingTo("-50");
         });
@@ -127,10 +136,10 @@ class InventoryPersistenceTests {
 
     @Test void retryDoesNotDoubleConsumeAndConflictingKeyFails() {
         var receipt = receive("L", "100");
-        commands.handle(new ReviewRawMaterialBatchCommand(42L, receipt.getId(), RawMaterialBatchStatus.RELEASED, "Reviewed")).toOptional().orElseThrow();
+        commands.handle(new ReviewRawMaterialBatchCommand(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), RawMaterialBatchStatus.RELEASED, "Reviewed")).toOptional().orElseThrow();
         var request = request(receipt, batch(42, BatchStatus.IN_PROGRESS), "25", UUID.randomUUID().toString());
         assertThat(inventory.consume(request)).isEqualTo(inventory.consume(request));
-        assertThat(queries.handle(new GetMaterialReceiptsQuery(42L, receipt.getRawMaterialId())).getFirst().getAvailableAmount()).isEqualByComparingTo("75");
+        assertThat(queries.handle(new GetRawMaterialBatchesQuery(42L, 1L, receipt.getRawMaterialId())).getFirst().getAvailableAmount()).isEqualByComparingTo("75");
         assertThat(usages.findAllByBatchId(request.productBatchId())).hasSize(1);
         assertThatThrownBy(() -> inventory.consume(new ConsumptionRequest(42L, receipt.getId(), request.productBatchId(),
             BigDecimal.TEN, "L", request.operationId()))).satisfies(error -> assertThat(((com.iotech.qualitrack.platform.shared.application.result.ApplicationException) error).error().details()).contains("different values"));
@@ -138,62 +147,62 @@ class InventoryPersistenceTests {
 
     @Test void failedBatchUsageRollsBackReceiptAndMovementTogether() {
         var receipt = receive("kg", "100");
-        commands.handle(new ReviewRawMaterialBatchCommand(42L, receipt.getId(), RawMaterialBatchStatus.RELEASED, "Reviewed")).toOptional().orElseThrow();
+        commands.handle(new ReviewRawMaterialBatchCommand(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), RawMaterialBatchStatus.RELEASED, "Reviewed")).toOptional().orElseThrow();
         long batch = batch(42, BatchStatus.IN_PROGRESS);
         doThrow(new IllegalStateException("Injected usage failure")).when(usages).save(any());
         assertThatThrownBy(() -> inventory.consume(request(receipt, batch, "50", UUID.randomUUID().toString())))
             .isInstanceOf(RuntimeException.class);
-        assertThat(queries.handle(new GetMaterialReceiptsQuery(42L, receipt.getRawMaterialId())).getFirst().getAvailableAmount()).isEqualByComparingTo("100");
-        assertThat(queries.handle(new GetMaterialMovementsQuery(42L, receipt.getRawMaterialId()))).noneMatch(movement -> movement.type().equals("CONSUMPTION"));
+        assertThat(queries.handle(new GetRawMaterialBatchesQuery(42L, 1L, receipt.getRawMaterialId())).getFirst().getAvailableAmount()).isEqualByComparingTo("100");
+        assertThat(queries.handle(new GetRawMaterialMovementsQuery(42L, 1L, receipt.getRawMaterialId()))).noneMatch(movement -> movement.type().equals("CONSUMPTION"));
     }
 
     @Test void duplicatesAndUnitChangesCannotCreateInconsistentStock() {
         var receipt = receive("kg", "100");
-        assertThatThrownBy(() -> commands.handle(new ReceiveRawMaterialBatchCommand(42L, receipt.getRawMaterialId(), "Supplier", "SUP-1", "kg",
+        assertThatThrownBy(() -> commands.handle(new ReceiveRawMaterialBatchCommand(42L, 1L, receipt.getRawMaterialId(), "Supplier", "SUP-1", "kg",
             BigDecimal.TEN, today(), today().plusDays(4))).toOptional().orElseThrow()).satisfies(error -> assertThat(((com.iotech.qualitrack.platform.shared.application.result.ApplicationException) error).error().details()).contains("already exists"));
-        assertThatThrownBy(() -> commands.handle(new ReceiveRawMaterialBatchCommand(42L, receipt.getRawMaterialId(), "Supplier", "SUP-2", "L",
+        assertThatThrownBy(() -> commands.handle(new ReceiveRawMaterialBatchCommand(42L, 1L, receipt.getRawMaterialId(), "Supplier", "SUP-2", "L",
             BigDecimal.TEN, today(), today().plusDays(4))).toOptional().orElseThrow()).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> commands.handle(new SaveRawMaterialCommand(42L, receipt.getRawMaterialId(), "C", "Name", "L", BigDecimal.ZERO)).toOptional().orElseThrow())
+        assertThatThrownBy(() -> commands.handle(new SaveRawMaterialCommand(42L, 1L, receipt.getRawMaterialId(), "C", "Name", "L", BigDecimal.ZERO)).toOptional().orElseThrow())
             .isInstanceOf(IllegalArgumentException.class);
-        assertThat(queries.handle(new GetMaterialReceiptsQuery(42L, receipt.getRawMaterialId()))).hasSize(1);
+        assertThat(queries.handle(new GetRawMaterialBatchesQuery(42L, 1L, receipt.getRawMaterialId()))).hasSize(1);
     }
 
     @Test void expiredReceiptAndClosedOrForeignBatchCannotConsume() {
         var receipt = receive("kg", "100");
-        commands.handle(new ReviewRawMaterialBatchCommand(42L, receipt.getId(), RawMaterialBatchStatus.RELEASED, "Reviewed")).toOptional().orElseThrow();
+        commands.handle(new ReviewRawMaterialBatchCommand(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), RawMaterialBatchStatus.RELEASED, "Reviewed")).toOptional().orElseThrow();
         for (var status : new BatchStatus[]{BatchStatus.RELEASED, BatchStatus.REJECTED}) {
             assertThatThrownBy(() -> inventory.consume(request(receipt, batch(42, status), "1", UUID.randomUUID().toString())))
                 .satisfies(error -> assertThat(((com.iotech.qualitrack.platform.shared.application.result.ApplicationException) error).error().details()).contains("Closed"));
         }
         assertThatThrownBy(() -> inventory.consume(request(receipt, batch(43, BatchStatus.IN_PROGRESS), "1", UUID.randomUUID().toString())))
             .hasMessageContaining("not found");
-        var expired = commands.handle(new ReceiveRawMaterialBatchCommand(42L, receipt.getRawMaterialId(), "Supplier", "EXPIRED", "kg", BigDecimal.TEN,
+        var expired = commands.handle(new ReceiveRawMaterialBatchCommand(42L, 1L, receipt.getRawMaterialId(), "Supplier", "EXPIRED", "kg", BigDecimal.TEN,
             today().minusDays(2), today())).toOptional().orElseThrow();
-        assertThatThrownBy(() -> commands.handle(new ReviewRawMaterialBatchCommand(42L, expired.getId(), RawMaterialBatchStatus.RELEASED, "Review")).toOptional().orElseThrow())
+        assertThatThrownBy(() -> commands.handle(new ReviewRawMaterialBatchCommand(42L, 1L, expired.getRawMaterialId(), expired.getId(), RawMaterialBatchStatus.RELEASED, "Review")).toOptional().orElseThrow())
             .satisfies(error -> assertThat(((com.iotech.qualitrack.platform.shared.application.result.ApplicationException) error).error().details()).contains("Expired"));
-        assertThatThrownBy(() -> commands.handle(new ReviewRawMaterialBatchCommand(42L, receipt.getId(), RawMaterialBatchStatus.OBSERVED, " ")).toOptional().orElseThrow())
+        assertThatThrownBy(() -> commands.handle(new ReviewRawMaterialBatchCommand(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), RawMaterialBatchStatus.OBSERVED, " ")).toOptional().orElseThrow())
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test void importIsExplicitIdempotentAndDoesNotReleaseOrDeductHistoricalStock() {
         var old = legacy.save(new RawMaterial(null, 42L, "Legacy", "OLD-" + UUID.randomUUID(), "Supplier", "SUP-OLD",
             today().plusYears(1).toString(), new BigDecimal("50"), "kg", BigDecimal.TEN));
-        Long material = imports.importMaterial(42L, old.getId());
-        assertThat(imports.importMaterial(42L, old.getId())).isEqualTo(material);
+        Long material = imports.handle(new ImportLegacyRawMaterialCommand(42L, 1L, old.getId()));
+        assertThat(imports.handle(new ImportLegacyRawMaterialCommand(42L, 1L, old.getId()))).isEqualTo(material);
         assertThat(legacy.findById(old.getId()).orElseThrow().getCurrentStock()).isEqualByComparingTo("50");
-        assertThat(queries.handle(new GetMaterialReceiptsQuery(42L, material))).singleElement().satisfies(receipt -> {
+        assertThat(queries.handle(new GetRawMaterialBatchesQuery(42L, 1L, material))).singleElement().satisfies(receipt -> {
             assertThat(receipt.getStatus()).isEqualTo(RawMaterialBatchStatus.QUARANTINED);
             assertThat(receipt.getAvailableAmount()).isEqualByComparingTo("50");
         });
-        assertThat(queries.handle(new GetMaterialMovementsQuery(42L, material))).singleElement().satisfies(movement ->
+        assertThat(queries.handle(new GetRawMaterialMovementsQuery(42L, 1L, material))).singleElement().satisfies(movement ->
             assertThat(movement.type()).isEqualTo("OPENING_BALANCE"));
-        assertThat(inventory.findUsableReceipts(42L, material, today())).isEmpty();
+        assertThat(usableStock(material)).isZero();
     }
 
     @Test void foreignTenantCannotReadReviewOrConsumeReceipt() {
         var receipt = receive("kg", "100");
-        assertThatThrownBy(() -> queries.handle(new GetMaterialReceiptsQuery(43L, receipt.getRawMaterialId()))).hasMessageContaining("not found");
-        assertThatThrownBy(() -> commands.handle(new ReviewRawMaterialBatchCommand(43L, receipt.getId(), RawMaterialBatchStatus.RELEASED, "Review")).toOptional().orElseThrow()).hasMessageContaining("not found");
+        assertThatThrownBy(() -> queries.handle(new GetRawMaterialBatchesQuery(43L, 1L, receipt.getRawMaterialId()))).hasMessageContaining("not found");
+        assertThatThrownBy(() -> commands.handle(new ReviewRawMaterialBatchCommand(43L, 1L, receipt.getRawMaterialId(), receipt.getId(), RawMaterialBatchStatus.RELEASED, "Review")).toOptional().orElseThrow()).hasMessageContaining("not found");
         assertThatThrownBy(() -> inventory.consume(new ConsumptionRequest(43L, receipt.getId(), 1L,
             BigDecimal.ONE, "kg", UUID.randomUUID().toString()))).hasMessageContaining("not found");
     }

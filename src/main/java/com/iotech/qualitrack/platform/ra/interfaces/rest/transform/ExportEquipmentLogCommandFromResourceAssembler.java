@@ -14,20 +14,28 @@ public final class ExportEquipmentLogCommandFromResourceAssembler {
     /**
      * Converts an equipment log export resource into a command.
      *
+     * @param laboratoryId the laboratory from the request path
+     * @param environmentId the environment of the equipment from the request path
      * @param equipmentId the equipment numeric identifier from the request path
      * @param resource the equipment log export request resource
+     * @param requestedBy the authenticated user
      * @return the equipment log export command
      */
     public static ExportEquipmentLogCommand toCommandFromResource(
+            Long laboratoryId,
+            Long environmentId,
             Long equipmentId,
-            ExportEquipmentLogResource resource
+            ExportEquipmentLogResource resource,
+            Long requestedBy
     ) {
         return new ExportEquipmentLogCommand(
+                laboratoryId,
+                environmentId,
                 equipmentId,
                 resource.startDate(),
                 resource.endDate(),
                 resource.format(),
-                resource.requestedBy()
+                requestedBy
         );
     }
 }

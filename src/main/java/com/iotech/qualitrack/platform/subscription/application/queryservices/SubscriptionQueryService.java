@@ -7,6 +7,7 @@ import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetActiv
 import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetActiveSubscriptionByUserIdQuery;
 import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetBillingSummaryByLaboratoryIdQuery;
 import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetPaymentsBySubscriptionIdQuery;
+import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetSubscriptionByIdQuery;
 import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetSubscriptionByStripeCheckoutSessionIdQuery;
 import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetSubscriptionPlansQuery;
 
@@ -29,4 +30,6 @@ public interface SubscriptionQueryService {
     List<SubscriptionPayment> handle(GetPaymentsBySubscriptionIdQuery query);
 
     Optional<Subscription> handle(GetSubscriptionByStripeCheckoutSessionIdQuery query);
+
+    Optional<Subscription> handle(GetSubscriptionByIdQuery query);
 }

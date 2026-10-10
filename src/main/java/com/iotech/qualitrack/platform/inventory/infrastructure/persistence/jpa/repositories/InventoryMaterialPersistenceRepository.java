@@ -6,6 +6,7 @@ import java.util.*;
 
 public interface InventoryMaterialPersistenceRepository extends JpaRepository<InventoryMaterialEntity, Long> {
     List<InventoryMaterialEntity> findAllByLaboratoryIdOrderByName(Long laboratoryId);
+    List<InventoryMaterialEntity> findAllByLaboratoryIdAndEnvironmentIdOrderByName(Long laboratoryId, Long environmentId);
     Optional<InventoryMaterialEntity> findByLaboratoryIdAndId(Long laboratoryId, Long id);
     Optional<InventoryMaterialEntity> findByLaboratoryIdAndLegacyId(Long laboratoryId, Long legacyId);
     @Lock(LockModeType.PESSIMISTIC_WRITE)

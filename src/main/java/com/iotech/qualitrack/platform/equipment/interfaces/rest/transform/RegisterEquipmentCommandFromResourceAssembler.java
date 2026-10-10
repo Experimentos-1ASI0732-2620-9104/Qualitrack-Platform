@@ -11,12 +11,13 @@ public class RegisterEquipmentCommandFromResourceAssembler {
     /**
      * Converts a RegisterEquipmentResource to a RegisterEquipmentCommand.
      *
+     * @param laboratoryId The laboratory of the request path.
      * @param resource The {@link RegisterEquipmentResource} resource to convert.
      * @return The {@link RegisterEquipmentCommand} command that results from the conversion.
      */
-    public static RegisterEquipmentCommand toCommandFromResource(RegisterEquipmentResource resource) {
+    public static RegisterEquipmentCommand toCommandFromResource(Long laboratoryId, RegisterEquipmentResource resource) {
         return new RegisterEquipmentCommand(
-                resource.laboratoryId(),
+                laboratoryId,
                 resource.name(),
                 resource.type(),
                 resource.model(),

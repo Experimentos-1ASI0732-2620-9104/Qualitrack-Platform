@@ -1,6 +1,7 @@
 package com.iotech.qualitrack.platform.ca.domain.model.events;
 
 import com.iotech.qualitrack.platform.ca.domain.model.aggregates.DeviationAlert;
+import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertOrigin;
 import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertSeverity;
 
 /**
@@ -22,6 +23,9 @@ import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertSeverity
  */
 public record DeviationAlertCreatedEvent(
         Long alertId,
+        Long laboratoryId,
+        Long environmentId,
+        AlertOrigin origin,
         Long equipmentId,
         Long batchId,
         String parameterName,
@@ -40,6 +44,9 @@ public record DeviationAlertCreatedEvent(
     public static DeviationAlertCreatedEvent from(DeviationAlert alert) {
         return new DeviationAlertCreatedEvent(
                 alert.getId(),
+                alert.getLaboratoryId(),
+                alert.getEnvironmentId(),
+                alert.getOrigin(),
                 alert.getEquipmentId(),
                 alert.getBatchId(),
                 alert.getParameterName(),

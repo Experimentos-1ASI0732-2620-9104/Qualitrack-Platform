@@ -4,29 +4,36 @@ import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertSeverity
 import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertStatus;
 
 /**
- * Query to get deviation alerts using optional filters.
+ * Query for the alerts of an environment and its monitored containers (US85, TS74).
  *
- * @param equipmentId The numeric identifier of the equipment, if filtering by equipment.
- * @param batchId The numeric identifier of the batch, if filtering by batch.
- * @param status The lifecycle status of the alert, if filtering by status.
- * @param severity The impact level of the alert, if filtering by severity.
+ * @param laboratoryId  the laboratory of the environment
+ * @param environmentId the environment
+ * @param deviceId      optional environmental device or container monitor
+ * @param status        optional lifecycle status
+ * @param severity      optional severity
+ * @param activeOnly    true to keep only open alerts (unresolved or being attended)
  */
 public record GetAlertsQuery(
-        Long equipmentId,
-        Long batchId,
+        Long laboratoryId,
+        Long environmentId,
+        Long deviceId,
         AlertStatus status,
-        AlertSeverity severity
+        AlertSeverity severity,
+        boolean activeOnly
 ) {
     /**
      * Compact constructor for GetAlertsQuery.
      * Enforces Fail-Fast validation for provided filters.
      */
     public GetAlertsQuery {
-        if (equipmentId != null && equipmentId <= 0) {
-            throw new IllegalArgumentException("equipmentId must be greater than 0.");
+        if (laboratoryId == null || laboratoryId <= 0) {
+            throw new IllegalArgumentException("laboratoryId must be greater than 0.");
         }
-        if (batchId != null && batchId <= 0) {
-            throw new IllegalArgumentException("batchId must be greater than 0.");
+        if (environmentId == null || environmentId <= 0) {
+            throw new IllegalArgumentException("environmentId must be greater than 0.");
+        }
+        if (deviceId != null && deviceId <= 0) {
+            throw new IllegalArgumentException("deviceId must be greater than 0.");
         }
     }
 }

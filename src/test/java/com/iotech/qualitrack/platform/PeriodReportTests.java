@@ -25,10 +25,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PeriodReportTests {
     private final ReportDocumentWriterImpl writer = new ReportDocumentWriterImpl();
     private final Instant generatedAt = Instant.parse("2026-09-05T07:16:58Z");
-    private final List<ComplianceReportData.Deviation> alerts = List.of(
-            new ComplianceReportData.Deviation(4L, 4L, 6L, "Temperature", 9.3, 8.0, "C", "2026-09-05T07:00:00Z", "CRITICAL", "UNRESOLVED", null),
-            new ComplianceReportData.Deviation(5L, 5L, 7L, "Temperature", 38.4, 38.0, "C", "2026-09-05T06:00:00Z", "WARNING", "ACKNOWLEDGED", null),
-            new ComplianceReportData.Deviation(6L, 6L, null, "Humidity", 68.0, 65.0, "%", "2026-09-05T05:00:00Z", "WARNING", "RESOLVED", "DEMO: Ventilation adjusted; follow-up reading pending."));
+    private final List<ComplianceReportData.Alert> alerts = List.of(
+            new ComplianceReportData.Alert(4L, 6L, "Cold chamber", "ENVIRONMENTAL_DEVICE", "TEMPERATURE", 9.3, 8.0, "C", "2026-09-05T07:00:00Z", "CRITICAL", "UNRESOLVED", 1, null),
+            new ComplianceReportData.Alert(5L, 7L, "Cold chamber", "CONTAINER_MONITOR", "TEMPERATURE", 38.4, 38.0, "C", "2026-09-05T06:00:00Z", "WARNING", "ACKNOWLEDGED", 2, null),
+            new ComplianceReportData.Alert(6L, 8L, null, "CONTAINER_MONITOR", "HUMIDITY", 68.0, 65.0, "%", "2026-09-05T05:00:00Z", "WARNING", "RESOLVED", 1, "DEMO: Ventilation adjusted; follow-up reading pending."));
     private final List<EquipmentReportData.Parameter> parameters = List.of(
             new EquipmentReportData.Parameter("Temperature", 2.0, 8.0, "C"),
             new EquipmentReportData.Parameter("Humidity", 30.0, 65.0, "%"));
@@ -43,9 +43,9 @@ class PeriodReportTests {
     @Test void compliancePdfShowsCountsReferencesThresholdsAndScope() throws Exception {
         var bytes = writer.writeCompliance(ReportFormat.PDF, compliance(alerts));
         try (var pdf = Loader.loadPDF(bytes)) {
-            assertThat(checkedText(pdf)).contains("Compliance review report", "01 Sep 2026 to 05 Sep 2026",
-                    "ALERTS BY CURRENT STATUS", "ALERTS BY SEVERITY", "acknowledged", "critical", "Equipment #4",
-                    "Limit: 8 C", "Batch: Not recorded", "Ventilation adjusted", "not a regulatory certification", "Billy1");
+            assertThat(checkedText(pdf)).contains("Environmental report", "01 Sep 2026 to 05 Sep 2026",
+                    "READINGS", "DEVIATIONS", "ALERTS", "acknowledged", "critical", "Alert #4",
+                    "Limit: 8", "Ventilation adjusted", "not a regulatory certification", "Billy1");
             preview("compliance-report", bytes, pdf);
         }
     }
@@ -63,7 +63,7 @@ class PeriodReportTests {
     @Test void emptyPeriodsDoNotInventChartsScoresOrMaintenance() throws Exception {
         var compliance = writer.writeCompliance(ReportFormat.PDF, compliance(List.of()));
         try (var pdf = Loader.loadPDF(compliance)) {
-            assertThat(checkedText(pdf)).contains("No deviation records").doesNotContain("ALERTS BY", "100%");
+            assertThat(checkedText(pdf)).contains("No alerts started in the selected period.").doesNotContain("ALERTS BY", "100%");
             preview("compliance-empty", compliance, pdf);
         }
         var equipment = writer.writeEquipment(ReportFormat.PDF, equipment(List.of(), List.of(), List.of()));
@@ -87,8 +87,8 @@ class PeriodReportTests {
 
     @Test void complianceCsvHasIndependentDataColumnsRatherThanPackedText() {
         String csv = new String(writer.writeCompliance(ReportFormat.CSV, compliance(alerts)), StandardCharsets.UTF_8);
-        assertThat(csv).contains("\"Alert ID\",\"Equipment ID\",\"Batch ID\",\"Recorded at\"",
-                "\"4\",\"4\",\"6\",\"2026-09-05T07:00:00Z\",\"Temperature\",\"9.3\",\"8.0\",\"C\"");
+        assertThat(csv).contains("\"Alert ID\",\"Origin\",\"Device\",\"Detected at\",\"Variable\"",
+                "\"4\",\"ENVIRONMENTAL_DEVICE\",\"Cold chamber\",\"2026-09-05T07:00:00Z\",\"TEMPERATURE\",\"9.3\",\"8.0\",\"C\"");
     }
 
     @Test void equipmentCsvPreservesDetailsAndProtectsSpreadsheetFormulaCells() {
@@ -98,8 +98,10 @@ class PeriodReportTests {
                 "\"'=1+2,\"\"quoted\"\"\nsecond line\"", "\"Parameter\",\"Minimum\",\"Maximum\",\"Unit\"");
     }
 
-    private ComplianceReportData compliance(List<ComplianceReportData.Deviation> alerts) {
-        return new ComplianceReportData(1L, "DEMO Multilab", "2026-09-01", "2026-09-05", alerts, "Billy1", generatedAt);
+    private ComplianceReportData compliance(List<ComplianceReportData.Alert> alerts) {
+        var indicators = List.of(new ComplianceReportData.Indicator(6L, "Cold chamber", "TEMPERATURE", "C", 120, 5.1, 2.0, 9.3, 96.5, 3, 1));
+        var section = new ComplianceReportData.EnvironmentSection(1L, "ENV-1", "Cold room", indicators, alerts, List.of());
+        return new ComplianceReportData(1L, "DEMO Multilab", "2026-09-01", "2026-09-05", List.of(section), "Billy1", generatedAt);
     }
 
     private EquipmentReportData equipment(List<EquipmentReportData.Parameter> parameters,

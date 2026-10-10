@@ -9,19 +9,20 @@ import java.util.Set;
 @Component
 public class LaboratoryTenantResourceLookup implements TenantResourceLookup {
     private final RawMaterialRepository materials;
-    private final ProductRepository products;
     private final StaffRepository staff;
-    public LaboratoryTenantResourceLookup(RawMaterialRepository materials, ProductRepository products, StaffRepository staff) {
+    private final EnvironmentRepository environments;
+    public LaboratoryTenantResourceLookup(RawMaterialRepository materials, StaffRepository staff,
+                                          EnvironmentRepository environments) {
         this.materials = materials;
-        this.products = products;
         this.staff = staff;
+        this.environments = environments;
     }
-    public Set<String> types() { return Set.of("rawMaterialId", "productId", "staffId"); }
+    public Set<String> types() { return Set.of("legacyRawMaterialId", "staffId", "environmentId"); }
     public Optional<ResourceOwner> owner(String type, Long id) {
         return switch (type) {
-            case "rawMaterialId" -> materials.findById(id).map(item -> new ResourceOwner("laboratoryId", item.getLaboratoryId()));
-            case "productId" -> products.findById(id).map(item -> new ResourceOwner("laboratoryId", item.getLaboratoryId()));
+            case "legacyRawMaterialId" -> materials.findById(id).map(item -> new ResourceOwner("laboratoryId", item.getLaboratoryId()));
             case "staffId" -> staff.findById(id).map(item -> new ResourceOwner("laboratoryId", item.getLaboratoryId()));
+            case "environmentId" -> environments.findById(id).map(item -> new ResourceOwner("laboratoryId", item.getLaboratoryId()));
             default -> Optional.empty();
         };
     }

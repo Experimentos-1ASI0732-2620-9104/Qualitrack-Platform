@@ -1,30 +1,46 @@
 package com.iotech.qualitrack.platform.ca.application.internal.outboundservices.acl;
 
-import com.iotech.qualitrack.platform.equipment.domain.repositories.EquipmentRepository;
+import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertOrigin;
+import com.iotech.qualitrack.platform.equipment.interfaces.acl.EquipmentContextFacade;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 /**
- * ACL service used by the CA bounded context to access equipment information.
- *
- * <p>Prevents CA application services from depending directly on equipment
- * application services while still allowing cross-context validation.</p>
+ * Anti-corruption service that resolves, through Equipment Management, the IoT device where a deviation originated.
  */
 @Service
 public class CaExternalEquipmentService {
 
-    private final EquipmentRepository equipmentRepository;
+    private final EquipmentContextFacade equipmentContextFacade;
 
-    public CaExternalEquipmentService(EquipmentRepository equipmentRepository) {
-        this.equipmentRepository = equipmentRepository;
+    public CaExternalEquipmentService(EquipmentContextFacade equipmentContextFacade) {
+        this.equipmentContextFacade = equipmentContextFacade;
     }
 
     /**
-     * Checks whether an equipment exists by its numeric identifier.
+     * Finds the IoT device of an environment that detected a deviation.
      *
-     * @param equipmentId The equipment ID.
-     * @return true if the equipment exists; otherwise false.
+     * @param laboratoryId the laboratory of the environment
+     * @param environmentId the environment
+     * @param deviceId the environmental device or container monitor; null means the environmental device of the
+     *                 environment
+     * @return the device with the origin it supervises, or empty when it is not an IoT device located there
      */
-    public boolean existsEquipmentById(Long equipmentId) {
-        return equipmentId != null && equipmentRepository.existsById(equipmentId);
+    public Optional<AlertSource> findSource(Long laboratoryId, Long environmentId, Long deviceId) {
+        var device = deviceId == null
+                ? equipmentContextFacade.findEnvironmentalDevice(laboratoryId, environmentId)
+                : equipmentContextFacade.findDevice(laboratoryId, environmentId, deviceId);
+        return device.map(found -> new AlertSource(found.id(), found.name(), AlertOrigin.fromDeviceType(found.deviceType())));
+    }
+
+    /**
+     * IoT device where an alert originates.
+     *
+     * @param deviceId the environmental device or container monitor
+     * @param name the device name
+     * @param origin whether it supervises the environment or a container
+     */
+    public record AlertSource(Long deviceId, String name, AlertOrigin origin) {
     }
 }

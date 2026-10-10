@@ -7,5 +7,6 @@ public enum ReportType {
     BATCH_TRACEABILITY,
     COMPLIANCE_PERIOD,
     EQUIPMENT_LOG,
+    INVENTORY,
     KPI_SUMMARY
 }

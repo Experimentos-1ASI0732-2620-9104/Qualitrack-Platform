@@ -6,5 +6,6 @@ package com.iotech.qualitrack.platform.iam.domain.model.valueobjects;
 public enum Roles {
     ROLE_ADMIN,
     ROLE_QA_MANAGER,
-    ROLE_LAB_OPERATOR
+    ROLE_LAB_OPERATOR,
+    ROLE_AUDITOR
 }

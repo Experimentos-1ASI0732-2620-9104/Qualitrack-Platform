@@ -3,11 +3,16 @@ package com.iotech.qualitrack.platform.shared.interfaces.rest;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
 import com.iotech.qualitrack.platform.shared.interfaces.rest.transform.ErrorResponseAssembler;
 import org.jspecify.annotations.NullMarked;
+import com.iotech.qualitrack.platform.shared.interfaces.rest.resources.ErrorResource;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.text.MessageFormat;
 import java.util.MissingResourceException;
@@ -41,8 +46,36 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<?> handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
-        return ResponseEntity.status(403).body(java.util.Map.of(
-                "code", "ACCESS_DENIED", "message", ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResource("ACCESS_DENIED",
+                ex.getMessage() != null ? ex.getMessage() : "Resource is not available to this account"));
+    }
+
+    /**
+     * A path that matches no endpoint is a resource that does not exist: 404 with the standard error body.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<?> handleNoResourceFound(NoResourceFoundException ex) {
+        return ErrorResponseAssembler.toErrorResponseFromApplicationError(
+                ApplicationError.notFound("Resource", "/" + ex.getResourcePath()));
+    }
+
+    /**
+     * The resource exists but does not support the method, for example PATCH on a resource whose changes are
+     * registered as sub-resources: 405 with the methods it allows.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<?> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        var response = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        if (ex.getSupportedHttpMethods() != null) response.allow(ex.getSupportedHttpMethods().toArray(org.springframework.http.HttpMethod[]::new));
+        return response.body(new ErrorResource("METHOD_NOT_ALLOWED", "Method " + ex.getMethod() + " is not supported by this resource"));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<?> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
+        var supported = ex.getSupportedMediaTypes().isEmpty() ? "application/json"
+                : String.join(" or ", ex.getSupportedMediaTypes().stream().map(Object::toString).toList());
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(new ErrorResource("UNSUPPORTED_MEDIA_TYPE", "The request body must be " + supported));
     }
 
     /**

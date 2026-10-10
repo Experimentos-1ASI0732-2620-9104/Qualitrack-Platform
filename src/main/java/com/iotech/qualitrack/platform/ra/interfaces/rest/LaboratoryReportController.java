@@ -2,109 +2,95 @@ package com.iotech.qualitrack.platform.ra.interfaces.rest;
 
 import com.iotech.qualitrack.platform.ra.application.commandservices.RaCommandService;
 import com.iotech.qualitrack.platform.ra.application.queryservices.RaQueryService;
-import com.iotech.qualitrack.platform.ra.domain.model.aggregates.AuditReport;
 import com.iotech.qualitrack.platform.ra.domain.model.queries.GetAuditReportsByLaboratoryIdQuery;
-import com.iotech.qualitrack.platform.ra.domain.model.valueobjects.ReportFormat;
 import com.iotech.qualitrack.platform.ra.interfaces.rest.resources.AuditReportResource;
 import com.iotech.qualitrack.platform.ra.interfaces.rest.resources.GenerateComplianceReportResource;
+import com.iotech.qualitrack.platform.ra.interfaces.rest.resources.GenerateInventoryReportResource;
 import com.iotech.qualitrack.platform.ra.interfaces.rest.transform.AuditReportResourceFromEntityAssembler;
 import com.iotech.qualitrack.platform.ra.interfaces.rest.transform.GenerateComplianceReportCommandFromResourceAssembler;
-import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
-import com.iotech.qualitrack.platform.shared.application.result.Result;
-import com.iotech.qualitrack.platform.shared.interfaces.rest.transform.ErrorResponseAssembler;
+import com.iotech.qualitrack.platform.ra.interfaces.rest.transform.GenerateInventoryReportCommandFromResourceAssembler;
+import com.iotech.qualitrack.platform.ra.interfaces.rest.transform.ReportResponseAssembler;
+import com.iotech.qualitrack.platform.shared.application.security.CurrentUser;
+import com.iotech.qualitrack.platform.shared.interfaces.rest.resources.ErrorResource;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Locale;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
- * REST controller that exposes laboratory report endpoints.
+ * Compliance reports of a laboratory (TS83) and the reports generated in it.
  */
 @RestController
-@RequestMapping(value = "/api/v1/laboratories/{laboratoryId}")
-@Tag(name = "Laboratories", description = "Laboratory report endpoints")
+@RequestMapping(value = "/api/v1/laboratories/{laboratoryId}", produces = APPLICATION_JSON_VALUE)
 public class LaboratoryReportController {
 
     private final RaCommandService raCommandService;
     private final RaQueryService raQueryService;
+    private final CurrentUser currentUser;
 
-    public LaboratoryReportController(
-            RaCommandService raCommandService,
-            RaQueryService raQueryService
-    ) {
+    public LaboratoryReportController(RaCommandService raCommandService, RaQueryService raQueryService,
+                                      CurrentUser currentUser) {
         this.raCommandService = raCommandService;
         this.raQueryService = raQueryService;
+        this.currentUser = currentUser;
     }
 
     @PostMapping(value = "/compliance-reports", consumes = APPLICATION_JSON_VALUE)
-    @Operation(summary = "Generate laboratory compliance report")
-    public ResponseEntity<?> generateComplianceReport(
-            @PathVariable Long laboratoryId,
-            @RequestBody GenerateComplianceReportResource resource
-    ) {
-        var command = GenerateComplianceReportCommandFromResourceAssembler.toCommandFromResource(
-                laboratoryId,
-                resource
-        );
-
-        var result = raCommandService.handle(command);
-
-        return toFileResponse(
-                result,
-                "compliance-report-%d.%s".formatted(
-                        laboratoryId,
-                        toExtensionFromFormat(resource.format())
-                ),
-                resource.format()
-        );
+    @Operation(summary = "Generate the environmental report of a period",
+            description = "Stores the PDF or CSV report requested by the authenticated user for whole calendar days "
+                    + "(America/Lima) of every environment or of environmentId (US95, TS83): average, minimum and maximum "
+                    + "of the readings, time in range and deviations per device and variable, the alerts that started in "
+                    + "the period and the actions of the container monitors.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Report generated; Location points to the report",
+                    content = @Content(schema = @Schema(implementation = AuditReportResource.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid period or format, or environment not in the laboratory",
+                    content = @Content(schema = @Schema(implementation = ErrorResource.class))),
+            @ApiResponse(responseCode = "403", description = "Laboratory not available to the account")
+    })
+    public ResponseEntity<?> generateComplianceReport(@PathVariable Long laboratoryId,
+                                                      @RequestBody GenerateComplianceReportResource resource) {
+        var command = GenerateComplianceReportCommandFromResourceAssembler.toCommandFromResource(laboratoryId, resource,
+                currentUser.userId());
+        return ReportResponseAssembler.toCreatedResponse(raCommandService.handle(command));
     }
 
-    @GetMapping(value = "/reports", produces = APPLICATION_JSON_VALUE)
-    @Operation(summary = "Get audit reports by laboratory")
-    public ResponseEntity<List<AuditReportResource>> getAuditReportsByLaboratoryId(
-            @PathVariable Long laboratoryId
-    ) {
-        var reports = raQueryService.handle(new GetAuditReportsByLaboratoryIdQuery(laboratoryId));
-
-        return ResponseEntity.ok(toAuditReportResources(reports));
+    @PostMapping(value = "/inventory/reports", consumes = APPLICATION_JSON_VALUE)
+    @Operation(summary = "Generate the inventory report",
+            description = "Stores the PDF or CSV report requested by the authenticated user with the raw materials, lots and "
+                    + "quantities of every environment or of environmentId (US97, TS85).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Report generated; Location points to the report",
+                    content = @Content(schema = @Schema(implementation = AuditReportResource.class))),
+            @ApiResponse(responseCode = "400", description = "Missing format or environment not in the laboratory",
+                    content = @Content(schema = @Schema(implementation = ErrorResource.class))),
+            @ApiResponse(responseCode = "403", description = "Laboratory not available to the account")
+    })
+    public ResponseEntity<?> generateInventoryReport(@PathVariable Long laboratoryId,
+                                                     @RequestBody GenerateInventoryReportResource resource) {
+        var command = GenerateInventoryReportCommandFromResourceAssembler.toCommandFromResource(laboratoryId, resource,
+                currentUser.userId());
+        return ReportResponseAssembler.toCreatedResponse(raCommandService.handle(command));
     }
 
-    private static List<AuditReportResource> toAuditReportResources(List<AuditReport> reports) {
-        return reports.stream()
+    @GetMapping("/reports")
+    @Operation(summary = "Get the reports generated in the laboratory")
+    public ResponseEntity<List<AuditReportResource>> getAuditReportsByLaboratoryId(@PathVariable Long laboratoryId) {
+        var resources = raQueryService.handle(new GetAuditReportsByLaboratoryIdQuery(laboratoryId)).stream()
                 .map(AuditReportResourceFromEntityAssembler::toResourceFromEntity)
                 .toList();
-    }
-
-    private static ResponseEntity<?> toFileResponse(
-            Result<byte[], ApplicationError> result,
-            String filename,
-            ReportFormat format
-    ) {
-        return switch (result) {
-            case Result.Success<byte[], ApplicationError> success -> ResponseEntity.ok()
-                    .contentType(toMediaTypeFromFormat(format))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"%s\"".formatted(filename))
-                    .body(success.value());
-
-            case Result.Failure<byte[], ApplicationError> failure ->
-                    ErrorResponseAssembler.toErrorResponseFromApplicationError(failure.error());
-        };
-    }
-
-    private static MediaType toMediaTypeFromFormat(ReportFormat format) {
-        if (format == ReportFormat.CSV) return MediaType.parseMediaType("text/csv");
-        if (format == ReportFormat.PDF) return MediaType.APPLICATION_PDF;
-        return MediaType.APPLICATION_OCTET_STREAM;
-    }
-
-    private static String toExtensionFromFormat(ReportFormat format) {
-        return format.name().toLowerCase(Locale.ROOT);
+        return ResponseEntity.ok(resources);
     }
 }

@@ -2,6 +2,7 @@ package com.iotech.qualitrack.platform.equipment.infrastructure.persistence.jpa.
 
 import com.iotech.qualitrack.platform.equipment.domain.model.aggregates.Equipment;
 import com.iotech.qualitrack.platform.equipment.domain.model.valueobjects.DeviceId;
+import com.iotech.qualitrack.platform.equipment.domain.model.valueobjects.IotDeviceType;
 import com.iotech.qualitrack.platform.equipment.domain.repositories.EquipmentRepository;
 import com.iotech.qualitrack.platform.equipment.infrastructure.persistence.jpa.assemblers.EquipmentPersistenceAssembler;
 import com.iotech.qualitrack.platform.equipment.infrastructure.persistence.jpa.repositories.EquipmentPersistenceRepository;
@@ -69,6 +70,16 @@ public class EquipmentRepositoryImpl implements EquipmentRepository {
     @Override
     public boolean existsBySerialNumber(String serialNumber) {
         return repository.existsBySerialNumber(serialNumber);
+    }
+
+    @Override
+    public boolean existsBySensorExternalId(DeviceId sensorExternalId) {
+        return repository.existsBySensorExternalId(sensorExternalId.value());
+    }
+
+    @Override
+    public boolean existsOtherDeviceInEnvironment(Long environmentId, IotDeviceType deviceType, Long equipmentId) {
+        return repository.existsByEnvironmentIdAndDeviceTypeAndIdNot(environmentId, deviceType, equipmentId);
     }
 
     @Override

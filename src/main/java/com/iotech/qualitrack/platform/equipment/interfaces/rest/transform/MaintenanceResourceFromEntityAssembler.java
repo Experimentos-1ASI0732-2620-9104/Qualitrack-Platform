@@ -18,8 +18,10 @@ public class MaintenanceResourceFromEntityAssembler {
         return new MaintenanceRecordResource(
                 entity.getId(),
                 entity.getEquipmentId(),
+                entity.getEnvironmentId(),
                 entity.getMaintenanceDate() != null ? entity.getMaintenanceDate().toString() : null,
                 entity.getTechnicianName(),
+                entity.getTechnicianStaffId(),
                 entity.getDescription(),
                 entity.getType().name()
         );

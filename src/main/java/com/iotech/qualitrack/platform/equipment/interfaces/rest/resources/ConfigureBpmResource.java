@@ -3,17 +3,18 @@ package com.iotech.qualitrack.platform.equipment.interfaces.rest.resources;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * Configure BPM Parameter resource.
+ * Range of a BPM parameter of an equipment; the parameter is identified by the path.
+ *
+ * @param minValue minimum acceptable value
+ * @param maxValue maximum acceptable value
+ * @param unit     measurement unit
  */
 @Schema(
         name = "ConfigureBpmRequest",
-        description = "Request payload for configuring an equipment's BPM parameter limits",
-        example = "{\"parameterName\": \"TEMPERATURE\", \"minValue\": 2.0, \"maxValue\": 8.0, \"unit\": \"Celsius\"}"
+        description = "Request payload for configuring the limits of a BPM parameter of an equipment",
+        example = "{\"minValue\": 2.0, \"maxValue\": 8.0, \"unit\": \"Celsius\"}"
 )
 public record ConfigureBpmResource(
-
-        @Schema(description = "Critical variable or parameter name", example = "TEMPERATURE", minLength = 1, maxLength = 100)
-        String parameterName,
 
         @Schema(description = "Minimum acceptable value", example = "2.0")
         Double minValue,
@@ -24,22 +25,4 @@ public record ConfigureBpmResource(
         @Schema(description = "Measurement unit", example = "Celsius", minLength = 1, maxLength = 20)
         String unit
 ) {
-    /**
-     * Validates the resource properties (Fail-Fast).
-     * @throws IllegalArgumentException if required fields are missing or invalid.
-     */
-    public ConfigureBpmResource {
-        if (parameterName == null || parameterName.isBlank()) {
-            throw new IllegalArgumentException("Parameter name is required");
-        }
-        if (minValue == null) {
-            throw new IllegalArgumentException("Minimum value is required");
-        }
-        if (maxValue == null) {
-            throw new IllegalArgumentException("Maximum value is required");
-        }
-        if (unit == null || unit.isBlank()) {
-            throw new IllegalArgumentException("Unit is required");
-        }
-    }
 }

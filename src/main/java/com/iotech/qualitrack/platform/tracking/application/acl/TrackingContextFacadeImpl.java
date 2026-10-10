@@ -1,97 +1,66 @@
 package com.iotech.qualitrack.platform.tracking.application.acl;
 
-import com.iotech.qualitrack.platform.tracking.application.queryservices.TrackingQueryService;
-import com.iotech.qualitrack.platform.tracking.domain.model.entities.EquipmentTelemetryStatus;
-import com.iotech.qualitrack.platform.tracking.domain.model.entities.Measurement;
-import com.iotech.qualitrack.platform.tracking.domain.model.entities.TelemetryHistoryPoint;
-import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetEquipmentTelemetryStatusByEquipmentIdQuery;
-import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetLatestMeasurementsQuery;
-import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetTelemetryHistoryQuery;
+import com.iotech.qualitrack.platform.tracking.domain.model.entities.ActuationEvent;
+import com.iotech.qualitrack.platform.tracking.domain.repositories.ActuationEventRepository;
+import com.iotech.qualitrack.platform.tracking.domain.repositories.MeasurementRepository;
 import com.iotech.qualitrack.platform.tracking.interfaces.acl.TrackingContextFacade;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
 /**
- * Application ACL implementation for the Tracking bounded context facade.
- *
- * @remarks
- * This class adapts internal Tracking query services into a stable facade
- * contract that can be consumed by other bounded contexts.
+ * Implementation of {@link TrackingContextFacade} over the Tracking repositories.
  */
 @Service
 public class TrackingContextFacadeImpl implements TrackingContextFacade {
+    private final ActuationEventRepository actuationEventRepository;
+    private final MeasurementRepository measurementRepository;
 
-    private final TrackingQueryService trackingQueryService;
-
-    /**
-     * Creates a new TrackingContextFacadeImpl.
-     *
-     * @param trackingQueryService Tracking query service
-     */
-    public TrackingContextFacadeImpl(TrackingQueryService trackingQueryService) {
-        this.trackingQueryService = trackingQueryService;
+    public TrackingContextFacadeImpl(ActuationEventRepository actuationEventRepository,
+                                     MeasurementRepository measurementRepository) {
+        this.actuationEventRepository = actuationEventRepository;
+        this.measurementRepository = measurementRepository;
     }
 
-    /**
-     * Retrieves latest telemetry measurements for an equipment.
-     *
-     * @param equipmentId the equipment identifier
-     * @return latest measurements for the equipment
-     */
     @Override
-    public List<Measurement> getLatestMeasurementsByEquipmentId(Long equipmentId) {
-        try {
-            return trackingQueryService.handle(new GetLatestMeasurementsQuery(equipmentId));
-        } catch (IllegalArgumentException exception) {
+    public List<ActuationReference> findActuations(Long laboratoryId, Long deviceId, String metric, Instant from, Instant to) {
+        if (laboratoryId == null || deviceId == null || metric == null || invalid(from, to)) {
             return List.of();
         }
+        return actuationEventRepository.findByDeviceAndPeriod(deviceId, from, to).stream()
+                .filter(event -> laboratoryId.equals(event.getLaboratoryId()))
+                .filter(event -> event.getTriggerMetric() != null && metric.equals(event.getTriggerMetric().name()))
+                .map(TrackingContextFacadeImpl::reference)
+                .toList();
     }
 
-    /**
-     * Retrieves the latest telemetry status for an equipment.
-     *
-     * @param equipmentId the equipment identifier
-     * @return latest telemetry status when found
-     */
     @Override
-    public Optional<EquipmentTelemetryStatus> getEquipmentStatusByEquipmentId(Long equipmentId) {
-        try {
-            return trackingQueryService.handle(
-                    new GetEquipmentTelemetryStatusByEquipmentIdQuery(equipmentId)
-            );
-        } catch (IllegalArgumentException exception) {
-            return Optional.empty();
-        }
+    public List<ActuationReference> findEnvironmentActuations(Long laboratoryId, Long environmentId, Instant from, Instant to) {
+        if (laboratoryId == null || environmentId == null || invalid(from, to)) return List.of();
+        return actuationEventRepository.findByEnvironmentAndPeriod(laboratoryId, environmentId, from, to).stream()
+                .map(TrackingContextFacadeImpl::reference)
+                .toList();
     }
 
-    /**
-     * Retrieves telemetry history points for an equipment.
-     *
-     * @param equipmentId the equipment identifier
-     * @return telemetry history points for the equipment
-     */
     @Override
-    public List<TelemetryHistoryPoint> getTelemetryHistoryByEquipmentId(Long equipmentId) {
-        try {
-            return trackingQueryService.handle(
-                    new GetTelemetryHistoryQuery(equipmentId, null, null)
-            );
-        } catch (IllegalArgumentException exception) {
-            return List.of();
-        }
+    public List<MeasurementReference> findMeasurements(Long laboratoryId, Long environmentId, Instant from, Instant to) {
+        if (laboratoryId == null || environmentId == null || invalid(from, to)) return List.of();
+        return measurementRepository.findByEnvironmentAndPeriod(laboratoryId, environmentId, from, to).stream()
+                .map(reading -> new MeasurementReference(reading.getId(), reading.getEquipmentId(),
+                        reading.getParameterName(), reading.getValue(), reading.getUnit(),
+                        reading.getState() == null ? null : reading.getState().name(), reading.getMeasuredAt()))
+                .toList();
     }
 
-    /**
-     * Determines whether an equipment has anomalous telemetry history points.
-     *
-     * @param equipmentId the equipment identifier
-     * @return true when at least one telemetry point is anomalous
-     */
-    @Override
-    public boolean hasAnomaliesByEquipmentId(Long equipmentId) {
-        return getTelemetryHistoryByEquipmentId(equipmentId).stream()
-                .anyMatch(TelemetryHistoryPoint::isAnomaly);
+    private static boolean invalid(Instant from, Instant to) {
+        return from == null || to == null || to.isBefore(from);
+    }
+
+    private static ActuationReference reference(ActuationEvent event) {
+        return new ActuationReference(event.getId(), event.getDeviceId(), event.getAction().name(),
+                event.getTriggerMetric() == null ? null : event.getTriggerMetric().name(),
+                event.getTriggerState() == null ? null : event.getTriggerState().name(),
+                event.getResult().name(), event.getOccurredAt());
     }
 }

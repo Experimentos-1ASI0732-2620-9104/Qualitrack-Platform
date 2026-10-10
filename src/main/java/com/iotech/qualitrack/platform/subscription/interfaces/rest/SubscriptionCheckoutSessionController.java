@@ -6,7 +6,6 @@ import com.iotech.qualitrack.platform.subscription.interfaces.rest.resources.Che
 import com.iotech.qualitrack.platform.subscription.interfaces.rest.resources.CreateCheckoutSessionResource;
 import com.iotech.qualitrack.platform.subscription.interfaces.rest.transform.CreateCheckoutSessionCommandFromResourceAssembler;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,7 +17,6 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
  */
 @RestController
 @RequestMapping(value = "/api/v1/subscription-checkout-sessions", produces = APPLICATION_JSON_VALUE)
-@Tag(name = "Subscription Checkout Sessions", description = "Subscription checkout session endpoints")
 public class SubscriptionCheckoutSessionController {
 
     private final SubscriptionCommandService subscriptionCommandService;

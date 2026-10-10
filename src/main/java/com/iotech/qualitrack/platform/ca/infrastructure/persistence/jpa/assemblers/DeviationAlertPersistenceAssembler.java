@@ -16,8 +16,13 @@ public final class DeviationAlertPersistenceAssembler {
 
         return new DeviationAlert(
                 entity.getId(),
+                entity.getLaboratoryId(),
+                entity.getEnvironmentId(),
+                entity.getOrigin(),
                 entity.getEquipmentId(),
                 entity.getBatchId(),
+                entity.getMeasurementId(),
+                entity.getLastMeasurementId(),
                 entity.getParameterName(),
                 entity.getRecordedValue(),
                 entity.getThresholdValue(),
@@ -25,8 +30,13 @@ public final class DeviationAlertPersistenceAssembler {
                 entity.getTimestamp(),
                 entity.getSeverity(),
                 entity.getStatus(),
+                entity.getDeviationCount(),
+                entity.getLastDetectedAt(),
+                entity.getNormalizedAt(),
                 entity.getAcknowledgedBy(),
+                entity.getAcknowledgedAt(),
                 entity.getResolvedBy(),
+                entity.getResolvedAt(),
                 entity.getResolutionNotes()
         );
     }
@@ -40,7 +50,17 @@ public final class DeviationAlertPersistenceAssembler {
             entity.setId(alert.getId());
         }
 
+        entity.setLaboratoryId(alert.getLaboratoryId());
+        entity.setEnvironmentId(alert.getEnvironmentId());
+        entity.setOrigin(alert.getOrigin());
         entity.setEquipmentId(alert.getEquipmentId());
+        entity.setMeasurementId(alert.getMeasurementId());
+        entity.setLastMeasurementId(alert.getLastMeasurementId());
+        entity.setDeviationCount(alert.getDeviationCount());
+        entity.setLastDetectedAt(alert.getLastDetectedAt());
+        entity.setNormalizedAt(alert.getNormalizedAt());
+        entity.setAcknowledgedAt(alert.getAcknowledgedAt());
+        entity.setResolvedAt(alert.getResolvedAt());
         entity.setBatchId(alert.getBatchId());
         entity.setParameterName(alert.getParameterName());
         entity.setRecordedValue(alert.getRecordedValue());

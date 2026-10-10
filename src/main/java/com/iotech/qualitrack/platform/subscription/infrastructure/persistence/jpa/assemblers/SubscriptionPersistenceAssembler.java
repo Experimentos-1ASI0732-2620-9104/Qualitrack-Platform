@@ -27,7 +27,8 @@ public class SubscriptionPersistenceAssembler {
                 entity.getCurrentPeriodStart(),
                 entity.getCurrentPeriodEnd(),
                 entity.getCancelledAt(),
-                entity.getCancelledBy()
+                entity.getCancelledBy(),
+                entity.isCancelAtPeriodEnd()
         );
     }
 
@@ -48,6 +49,7 @@ public class SubscriptionPersistenceAssembler {
         entity.setCurrentPeriodEnd(subscription.getCurrentPeriodEnd());
         entity.setCancelledAt(subscription.getCancelledAt());
         entity.setCancelledBy(subscription.getCancelledBy());
+        entity.setCancelAtPeriodEnd(subscription.isCancelAtPeriodEnd());
 
         return entity;
     }

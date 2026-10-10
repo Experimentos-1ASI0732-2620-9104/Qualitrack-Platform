@@ -39,7 +39,7 @@ public class MaintenanceRepositoryImpl implements MaintenanceRepository {
 
     @Override
     public List<MaintenanceRecord> findAllByEquipmentId(Long equipmentId) {
-        return repository.findAllByEquipmentId(equipmentId).stream()
+        return repository.findAllByEquipmentIdOrderByMaintenanceDateDescIdDesc(equipmentId).stream()
                 .map(MaintenancePersistenceAssembler::toDomainFromPersistence)
                 .toList();
     }

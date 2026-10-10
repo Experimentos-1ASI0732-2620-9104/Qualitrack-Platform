@@ -73,6 +73,16 @@ public record ApplicationError(
     /**
      * Unexpected error: something went wrong that shouldn't have
      */
+    /**
+     * An external service the operation depends on, for example the e-mail provider, did not do its part (502).
+     */
+    public static ApplicationError externalServiceFailure(String service, String reason) {
+        return new ApplicationError(
+                "EXTERNAL_SERVICE_ERROR",
+                "External service failed: %s".formatted(service),
+                reason);
+    }
+
     public static ApplicationError unexpected(String context, String reason) {
         return new ApplicationError(
                 "UNEXPECTED_ERROR",

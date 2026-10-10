@@ -26,9 +26,6 @@ public class NotificationPreferencePersistenceEntity extends AuditableAbstractPe
     @Column(name = "email_enabled", nullable = false)
     private Boolean emailEnabled;
 
-    @Column(name = "sms_enabled", nullable = false)
-    private Boolean smsEnabled;
-
     @Column(name = "in_app_enabled", nullable = false)
     private Boolean inAppEnabled;
 

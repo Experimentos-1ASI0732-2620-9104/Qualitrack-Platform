@@ -11,6 +11,7 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 
 /**
  * JPA entity for subscriptions.
@@ -63,4 +64,9 @@ public class SubscriptionPersistenceEntity extends AuditableAbstractPersistenceE
 
     @Column(name = "cancelled_by")
     private Long cancelledBy;
+
+    // Default so rows inserted without the column (older versions, existing rows) keep renewing.
+    @ColumnDefault("false")
+    @Column(name = "cancel_at_period_end", nullable = false)
+    private boolean cancelAtPeriodEnd;
 }

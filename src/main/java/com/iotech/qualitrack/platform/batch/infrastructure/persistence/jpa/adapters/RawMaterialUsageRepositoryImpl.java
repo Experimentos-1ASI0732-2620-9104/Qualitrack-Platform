@@ -52,6 +52,12 @@ public class RawMaterialUsageRepositoryImpl implements RawMaterialUsageRepositor
     }
 
     @Override
+    public Optional<RawMaterialUsage> findByBatchIdAndOperationId(Long batchId, String operationId) {
+        return repository.findByBatchIdAndOperationId(batchId, operationId)
+                .map(RawMaterialUsagePersistenceAssembler::toDomainFromPersistence);
+    }
+
+    @Override
     public RawMaterialUsage save(RawMaterialUsage rawMaterialUsage) {
         var entityToSave = RawMaterialUsagePersistenceAssembler.toPersistenceFromDomain(rawMaterialUsage);
 

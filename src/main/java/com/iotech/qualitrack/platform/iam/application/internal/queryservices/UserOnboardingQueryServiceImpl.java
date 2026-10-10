@@ -33,6 +33,6 @@ public class UserOnboardingQueryServiceImpl implements UserOnboardingQueryServic
         }
         var access = subscriptions.getAccess(user.getId(), laboratoryId);
         return new UserOnboarding(user.getId(), laboratoryId, access.subscriptionId(),
-                access.active() ? "ACTIVE" : "INACTIVE");
+                access.active() ? "ACTIVE" : "INACTIVE", user.isPasswordChangeRequired());
     }
 }

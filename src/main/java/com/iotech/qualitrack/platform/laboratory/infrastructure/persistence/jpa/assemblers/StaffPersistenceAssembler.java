@@ -20,7 +20,9 @@ public final class StaffPersistenceAssembler {
                 entity.getFullName(),
                 entity.getRole(),
                 entity.getEmail(),
-                entity.isActive()
+                entity.isActive(),
+                entity.getAccessRole(),
+                entity.getUserId()
         );
     }
 
@@ -40,6 +42,8 @@ public final class StaffPersistenceAssembler {
         entity.setRole(staffMember.getRole());
         entity.setEmail(staffMember.getEmail());
         entity.setActive(staffMember.isActive());
+        entity.setAccessRole(staffMember.getAccessRole());
+        entity.setUserId(staffMember.getUserId());
 
         return entity;
     }

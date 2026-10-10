@@ -14,6 +14,7 @@ import com.iotech.qualitrack.platform.batch.domain.model.events.BatchRejectedEve
  * @param batchNumber the traceability code assigned to the batch
  * @param rejectionDate the date when the batch was rejected
  * @param reason the rejection reason
+ * @param rejectedBy the account of the person who rejected the batch
  */
 public record BatchRejectedIntegrationEvent(
         Long batchId,
@@ -21,7 +22,8 @@ public record BatchRejectedIntegrationEvent(
         Long productId,
         String batchNumber,
         String rejectionDate,
-        String reason
+        String reason,
+        Long rejectedBy
 ) {
     /**
      * Creates an integration event from an internal domain event.
@@ -36,7 +38,8 @@ public record BatchRejectedIntegrationEvent(
                 event.productId(),
                 event.batchNumber(),
                 event.rejectionDate(),
-                event.reason()
+                event.reason(),
+                event.rejectedBy()
         );
     }
 }

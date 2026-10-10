@@ -11,6 +11,7 @@ package "Inventory Context" {
     * <u>id</u> : BIGINT PK AUTO_INCREMENT
     --
     laboratory_id : BIGINT NOT NULL
+    environment_id : BIGINT NULL
     legacy_id : BIGINT NULL
     code : VARCHAR(50) NOT NULL
     name : VARCHAR(150) NOT NULL
@@ -35,6 +36,10 @@ package "Inventory Context" {
     received_on : DATE NOT NULL
     expires_on : DATE NOT NULL
     status : VARCHAR(20) NOT NULL
+    container_monitor_id : BIGINT NULL
+    container_environment_id : BIGINT NULL
+    container_assigned_by : BIGINT NULL
+    container_assigned_at : DATETIME(6) NULL
     created_at : DATETIME(6) NOT NULL
     updated_at : DATETIME(6) NOT NULL
     --
@@ -80,6 +85,14 @@ package "Laboratory Context (reference)" {
     minimum_stock : DECIMAL(19,3)
   }
 }
+package "Equipment Context (reference)" {
+  entity "equipment" as equipment {
+    * id : BIGINT PK
+    environment_id : BIGINT
+    device_type : VARCHAR
+    status : VARCHAR
+  }
+}
 package "IAM Context (reference)" {
   entity "iam_users" as iam_users {
     * id : BIGINT PK
@@ -114,6 +127,8 @@ raw_materials |o..o| inventory_materials : legacy_id / explicit import
 batches |o..o{ inventory_movements : product_batch_id
 iam_users ||..o{ inventory_movements : actor_id
 inventory_receipts |o..o{ raw_material_usages : inventory_receipt_id
+equipment |o..o{ inventory_receipts : container_monitor_id
+iam_users |o..o{ inventory_receipts : container_assigned_by
 
 note bottom of inventory_materials
   Catalogue only: usableStock and physicalStock are calculated,
@@ -123,6 +138,8 @@ note bottom of inventory_receipts
   QUARANTINED / RELEASED / OBSERVED / REJECTED.
   Available stock belongs to each supplier receipt.
   Units must match the catalogue; no implicit conversion.
+  container_* columns: container monitor (CONTAINER_MONITOR equipment) where the lot
+  is stored and its RAW_MATERIAL_STORAGE environment; NULL while it has none.
 end note
 note bottom of inventory_movements
   Append-only application history; signed amount.

@@ -12,6 +12,7 @@ public class UserResourceFromEntityAssembler {
         return new UserResource(
                 user.getId(),
                 user.getUsernameValue(),
+                user.getEmailValue(),
                 user.getRoles().stream()
                         .map(role -> role.getName().name())
                         .toList(),
