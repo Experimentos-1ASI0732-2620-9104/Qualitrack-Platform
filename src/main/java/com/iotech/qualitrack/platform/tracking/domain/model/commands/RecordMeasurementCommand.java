@@ -1,39 +1,25 @@
 package com.iotech.qualitrack.platform.tracking.domain.model.commands;
 
+import com.iotech.qualitrack.platform.tracking.domain.model.valueobjects.MonitoredMetric;
+
+import java.time.Instant;
+
 /**
- * Command used to record a new telemetry measurement emitted by equipment.
+ * Records a reading synchronized from the Edge (TS54, TS55).
  *
- * @param equipmentId the numeric identifier of the equipment that produced the measurement
- * @param parameterName the monitored parameter name
- * @param value the measured value
- * @param unit the measurement unit
- * @param timestamp the timestamp when the measurement was captured
+ * @param deviceId       container monitor that measured, or null for the environmental device of the environment
+ * @param value          numeric value; null for an RFID reading
+ * @param textValue      RFID tag read; null for numeric metrics
+ * @param profileVersion profile version the device used, when it reports it
  */
-public record RecordMeasurementCommand(
-        Long equipmentId,
-        String parameterName,
-        Double value,
-        String unit,
-        String timestamp
-) {
-    /**
-     * Creates a validated command for recording telemetry measurements.
-     */
+public record RecordMeasurementCommand(Long laboratoryId, Long environmentId, Long deviceId, MonitoredMetric metric,
+                                       Double value, String textValue, Instant measuredAt, Long profileVersion) {
     public RecordMeasurementCommand {
-        if (equipmentId == null || equipmentId <= 0) {
-            throw new IllegalArgumentException("Equipment id must be a positive number");
-        }
-        if (parameterName == null || parameterName.isBlank()) {
-            throw new IllegalArgumentException("Parameter name is required");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("Measurement value is required");
-        }
-        if (unit == null || unit.isBlank()) {
-            throw new IllegalArgumentException("Measurement unit is required");
-        }
-        if (timestamp == null || timestamp.isBlank()) {
-            throw new IllegalArgumentException("Measurement timestamp is required");
-        }
+        TrackingCommandArguments.requirePositive(laboratoryId, "Laboratory ID");
+        TrackingCommandArguments.requirePositive(environmentId, "Environment ID");
+        if (deviceId != null) TrackingCommandArguments.requirePositive(deviceId, "Device ID");
+        if (metric == null) throw new IllegalArgumentException("The metric is required");
+        if (measuredAt == null) throw new IllegalArgumentException("The measurement time is required");
+        if (profileVersion != null && profileVersion < 0) throw new IllegalArgumentException("The profile version cannot be negative");
     }
 }
