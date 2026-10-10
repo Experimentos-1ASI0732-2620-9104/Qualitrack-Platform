@@ -13,436 +13,700 @@ package "shared" <<External>> {
   class ApplicationError
   class Result
   class ResponseEntityAssembler
+  class CurrentUser
 }
 
 package "spring" <<External>> {
   class ApplicationEventPublisher
   interface JpaRepository
-  interface AttributeConverter
+  class Clock
 }
 
-package "external bounded contexts" <<External>> {
-  interface RaContextFacade
-  interface CaCommandService
-  interface EquipmentRepository
-  interface BpmParameterConfigRepository
-  class BpmParameterConfig
+package "equipment.interfaces.acl" <<External>> {
+  interface EquipmentContextFacade {
+    + findDevice(laboratoryId, environmentId, deviceId): Optional<DeviceReference>
+    + findEnvironmentalDevice(laboratoryId, environmentId): Optional<DeviceReference>
+  }
 }
 
 package "tracking.domain.model.valueobjects" {
-  enum TelemetryParameterType {
-    TEMPERATURE
-    HUMIDITY
-    PRESSURE
-    RPM
-    VOLTAGE
-    CUSTOM
+  enum MonitoredMetric {
+    AIR_QUALITY (ppm, ENVIRONMENTAL_DEVICE)
+    MOTION (event, ENVIRONMENTAL_DEVICE)
+    TEMPERATURE (°C, CONTAINER_MONITOR)
+    HUMIDITY (%RH, CONTAINER_MONITOR)
+    LUMINOSITY (lux, CONTAINER_MONITOR)
+    RFID_TAG (tag, CONTAINER_MONITOR)
+    + unit(): String
+    + hasThresholds(): boolean
+    + isText(): boolean
+    + isDetection(): boolean
+    + isReportedBy(deviceType: String): boolean
+    + {static} reportedBy(deviceType: String): List<MonitoredMetric>
+    + {static} parse(value: String): Optional<MonitoredMetric>
   }
 
-  enum TelemetryStatus {
-    OPERATIONAL
+  enum EnvironmentalState {
+    NORMAL
     WARNING
     CRITICAL
-    OFFLINE
+    + worsens(previous: EnvironmentalState): boolean
+  }
+
+  class EnvironmentalThreshold <<record>> {
+    + metric: MonitoredMetric
+    + normalMin: Double
+    + normalMax: Double
+    + criticalMin: Double
+    + criticalMax: Double
+    + evaluate(value: double): ThresholdEvaluation
+    + unit(): String
+  }
+
+  class ThresholdEvaluation <<record>> {
+    + state: EnvironmentalState
+    + exceededLimit: Double
+  }
+
+  enum ActuationAction {
+    VENTILATION_ON
+    VENTILATION_OFF
+    COOLING_ON
+    COOLING_OFF
+    SERVO_OPEN
+    SERVO_CLOSE
+    + isActivation(): boolean
+    + {static} parse(value: String): Optional<ActuationAction>
+  }
+
+  class ActuationRule <<record>> {
+    + metric: MonitoredMetric
+    + state: EnvironmentalState
+    + action: ActuationAction
+  }
+
+  enum ProfileScope {
+    ENVIRONMENT
+    CONTAINER_MONITOR
+  }
+
+  enum ActuationResult {
+    EXECUTED
+    FAILED
+  }
+
+  enum DeviceConnectionStatus {
+    CONNECTED
+    REQUIRES_REVIEW
+  }
+
+  class ExpectedCommunicationPeriod <<record>> {
+    + value: Duration
+  }
+
+  class DeviceConnection <<record>> {
+    + deviceId: Long
+    + lastCommunicationAt: Instant
+    + status: DeviceConnectionStatus
+    + {static} evaluate(deviceId, lastCommunicationAt, now, expectedPeriod): DeviceConnection
   }
 }
 
-package "tracking.domain.model.commands" {
-  class RecordMeasurementCommand <<record>> {
-    + equipmentId: Long
-    + parameterName: String
-    + value: Double
-    + unit: String
-    + timestamp: String
-  }
-
-  class RecordTelemetryHistoryPointCommand <<record>> {
-    + equipmentId: Long
-    + parameterName: String
-    + recordedValue: Double
-    + timestamp: String
-    + isAnomaly: Boolean
-  }
-
-  class UpdateEquipmentTelemetryStatusCommand <<record>> {
-    + equipmentId: Long
-    + isOnline: Boolean
-    + currentStatus: TelemetryStatus
-    + lastHeartbeat: String
-  }
-}
-
-package "tracking.domain.model.queries" {
-  class GetLatestMeasurementsQuery <<record>> {
-    + equipmentId: Long
-  }
-
-  class GetEquipmentTelemetryStatusByEquipmentIdQuery <<record>> {
-    + equipmentId: Long
-  }
-
-  class GetTelemetryHistoryQuery <<record>> {
-    + equipmentId: Long
-    + from: String
-    + to: String
-  }
-}
+EnvironmentalThreshold --> MonitoredMetric
+EnvironmentalThreshold ..> ThresholdEvaluation
+ThresholdEvaluation --> EnvironmentalState
+ActuationRule --> MonitoredMetric
+ActuationRule --> EnvironmentalState
+ActuationRule --> ActuationAction
+DeviceConnection --> DeviceConnectionStatus
+DeviceConnection ..> ExpectedCommunicationPeriod
+note bottom of EnvironmentalThreshold
+  Each side (min/max) is complete or empty and at least one is given.
+  criticalMin < normalMin < normalMax < criticalMax.
+  Critical limits are checked first; the normal range is inclusive.
+end note
 
 package "tracking.domain.model.aggregates" {
-  class EquipmentTelemetry {
+  class EnvironmentalProfile {
     - id: Long
-    - equipmentId: Long
-    - status: EquipmentTelemetryStatus
-    - measurements: List<Measurement>
-    - historyPoints: List<TelemetryHistoryPoint>
-    + createForEquipment(equipmentId: Long): EquipmentTelemetry
-    + recordMeasurement(measurement: Measurement): void
-    + recordHistoryPoint(historyPoint: TelemetryHistoryPoint): void
-    + updateStatus(status: EquipmentTelemetryStatus): void
-    + hasAnomalies(): boolean
-    + anomalyCount(): long
-    + isOnline(): boolean
+    - laboratoryId: Long
+    - scope: ProfileScope
+    - environmentId: Long
+    - deviceId: Long
+    - version: long
+    - thresholds: List<EnvironmentalThreshold>
+    - actuationRules: List<ActuationRule>
+    - updatedBy: Long
+    - updatedAt: Instant
+    + {static} forEnvironment(laboratoryId, environmentId): EnvironmentalProfile
+    + {static} forContainerMonitor(laboratoryId, deviceId): EnvironmentalProfile
+    + replaceThresholds(thresholds, userId, now): void
+    + replaceActuationRules(rules, userId, now): void
+    + evaluate(metric: MonitoredMetric, value: double): Optional<ThresholdEvaluation>
   }
 }
+
+EnvironmentalProfile --|> AbstractDomainAggregateRoot
+EnvironmentalProfile --> ProfileScope
+EnvironmentalProfile *-- EnvironmentalThreshold
+EnvironmentalProfile *-- ActuationRule
+note right of EnvironmentalProfile
+  ENVIRONMENT: air quality thresholds of the environmental device (TS42).
+  CONTAINER_MONITOR: temperature, humidity (TS43) and luminosity (TS44)
+  thresholds and actuation rules (TS45). Every change increases the version.
+end note
 
 package "tracking.domain.model.entities" {
   class Measurement {
     - id: Long
+    - laboratoryId: Long
+    - environmentId: Long
     - equipmentId: Long
     - parameterName: String
     - value: Double
+    - textValue: String
     - unit: String
     - timestamp: String
-    - createdAt: String
-    + record(equipmentId: Long, parameterName: String, value: Double, unit: String, timestamp: String): Measurement
+    - measuredAt: Instant
+    - state: EnvironmentalState
+    - thresholdValue: Double
+    - profileVersion: Long
+    - receivedAt: Instant
+    + {static} receive(laboratoryId, environmentId, deviceId, metric, value, textValue, measuredAt, evaluation, profileVersion): Measurement
   }
 
-  class TelemetryHistoryPoint {
+  class ActuationEvent {
     - id: Long
-    - equipmentId: Long
-    - parameterName: String
-    - recordedValue: Double
-    - timestamp: String
-    - isAnomaly: Boolean
-    - createdAt: String
-    + record(equipmentId: Long, parameterName: String, recordedValue: Double, timestamp: String, isAnomaly: Boolean): TelemetryHistoryPoint
-    + isAnomaly(): boolean
-  }
-
-  class EquipmentTelemetryStatus {
-    - id: Long
-    - equipmentId: Long
-    - isOnline: Boolean
-    - currentStatus: TelemetryStatus
-    - lastHeartbeat: String
-    - createdAt: String
-    + update(equipmentId: Long, isOnline: Boolean, currentStatus: TelemetryStatus, lastHeartbeat: String): EquipmentTelemetryStatus
-    + isOperational(): boolean
-    + requiresAttention(): boolean
+    - laboratoryId: Long
+    - environmentId: Long
+    - deviceId: Long
+    - action: ActuationAction
+    - triggerMetric: MonitoredMetric
+    - triggerState: EnvironmentalState
+    - result: ActuationResult
+    - occurredAt: Instant
+    - profileVersion: Long
+    - receivedAt: Instant
+    + {static} record(laboratoryId, environmentId, deviceId, action, triggerMetric, triggerState, result, occurredAt, profileVersion): ActuationEvent
   }
 }
 
-EquipmentTelemetry --|> AbstractDomainAggregateRoot
-EquipmentTelemetry *-- EquipmentTelemetryStatus
-EquipmentTelemetry *-- Measurement
-EquipmentTelemetry *-- TelemetryHistoryPoint
+Measurement --> EnvironmentalState
+ActuationEvent --> ActuationAction
+ActuationEvent --> ActuationResult
+ActuationEvent --> MonitoredMetric
 
-EquipmentTelemetryStatus --> TelemetryStatus
-UpdateEquipmentTelemetryStatusCommand --> TelemetryStatus
+package "tracking.domain.model.commands" {
+  class UpdateEnvironmentThresholdsCommand <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+    + thresholds: List<EnvironmentalThreshold>
+    + userId: Long
+  }
+
+  class UpdateContainerMonitorThresholdsCommand <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+    + thresholds: List<EnvironmentalThreshold>
+    + userId: Long
+  }
+
+  class UpdateActuationRulesCommand <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+    + rules: List<ActuationRule>
+    + userId: Long
+  }
+
+  class RecordMeasurementCommand <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+    + metric: MonitoredMetric
+    + value: Double
+    + textValue: String
+    + measuredAt: Instant
+    + profileVersion: Long
+  }
+
+  class RecordActuationEventCommand <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+    + action: ActuationAction
+    + triggerMetric: MonitoredMetric
+    + triggerState: EnvironmentalState
+    + result: ActuationResult
+    + occurredAt: Instant
+    + profileVersion: Long
+  }
+}
+
+note bottom of RecordMeasurementCommand
+  deviceId null = environmental device of the environment.
+end note
+
+package "tracking.domain.model.queries" {
+  class GetEnvironmentProfileQuery <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+  }
+
+  class GetContainerMonitorProfileQuery <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+  }
+
+  class GetDeviceProfileQuery <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+  }
+
+  class GetMeasurementsQuery <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+    + metric: MonitoredMetric
+    + from: Instant
+    + to: Instant
+  }
+
+  class GetActuationEventsQuery <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+    + from: Instant
+    + to: Instant
+  }
+
+  class GetDeviceConnectionQuery <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+  }
+}
 
 package "tracking.domain.model.events" {
-  class MeasurementRecordedEvent <<record>>
-  class TelemetryHistoryPointRecordedEvent <<record>>
-  class TelemetryAnomalyDetectedEvent <<record>>
-  class EquipmentTelemetryStatusUpdatedEvent <<record>>
+  class MeasurementRecordedEvent <<record>> {
+    + measurementId: Long
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+    + metric: MonitoredMetric
+    + value: Double
+    + textValue: String
+    + unit: String
+    + measuredAt: Instant
+    + state: EnvironmentalState
+  }
+
+  class EnvironmentalDeviationDetectedEvent <<record>> {
+    + measurementId: Long
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+    + metric: MonitoredMetric
+    + value: Double
+    + unit: String
+    + state: EnvironmentalState
+    + thresholdValue: Double
+    + measuredAt: Instant
+  }
+
+  class EnvironmentalConditionNormalizedEvent <<record>> {
+    + measurementId: Long
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+    + metric: MonitoredMetric
+    + value: Double
+    + unit: String
+    + measuredAt: Instant
+  }
+
+  class EnvironmentalProfileUpdatedEvent <<record>> {
+    + profileId: Long
+    + laboratoryId: Long
+    + scope: ProfileScope
+    + environmentId: Long
+    + deviceId: Long
+    + version: long
+    + updatedBy: Long
+  }
 }
 
-EquipmentTelemetryStatusUpdatedEvent --> TelemetryStatus
-
 package "tracking.domain.repositories" {
-  interface EquipmentTelemetryRepository {
-    + findById(id: Long): Optional<EquipmentTelemetry>
-    + findByEquipmentId(equipmentId: Long): Optional<EquipmentTelemetry>
-    + save(equipmentTelemetry: EquipmentTelemetry): EquipmentTelemetry
-    + existsByEquipmentId(equipmentId: Long): boolean
+  interface EnvironmentalProfileRepository {
+    + save(profile: EnvironmentalProfile): EnvironmentalProfile
+    + findByEnvironmentId(environmentId: Long): Optional<EnvironmentalProfile>
+    + findByDeviceId(deviceId: Long): Optional<EnvironmentalProfile>
   }
 
   interface MeasurementRepository {
-    + findById(id: Long): Optional<Measurement>
-    + findLatest(): List<Measurement>
-    + findLatestByEquipmentId(equipmentId: Long): List<Measurement>
     + save(measurement: Measurement): Measurement
-    + existsById(id: Long): boolean
+    + findByDeviceAndPeriod(deviceId, metric, from, to): List<Measurement>
+    + findByDeviceAndMetricAndMeasuredAt(deviceId, metric, measuredAt): Optional<Measurement>
+    + findPreviousReading(deviceId, metric, before): Optional<Measurement>
+    + findByEnvironmentAndPeriod(laboratoryId, environmentId, from, to): List<Measurement>
+    + findLastReceivedAt(deviceId: Long): Optional<Instant>
   }
 
-  interface TelemetryHistoryPointRepository {
-    + findById(id: Long): Optional<TelemetryHistoryPoint>
-    + findByFilters(equipmentId: Long, from: String, to: String): List<TelemetryHistoryPoint>
-    + findAllByEquipmentId(equipmentId: Long): List<TelemetryHistoryPoint>
-    + findAllAnomaliesByEquipmentId(equipmentId: Long): List<TelemetryHistoryPoint>
-    + save(historyPoint: TelemetryHistoryPoint): TelemetryHistoryPoint
-    + existsById(id: Long): boolean
-  }
-
-  interface EquipmentTelemetryStatusRepository {
-    + findById(id: Long): Optional<EquipmentTelemetryStatus>
-    + findLatestByEquipmentId(equipmentId: Long): Optional<EquipmentTelemetryStatus>
-    + findAllLatest(): List<EquipmentTelemetryStatus>
-    + save(status: EquipmentTelemetryStatus): EquipmentTelemetryStatus
-    + existsById(id: Long): boolean
+  interface ActuationEventRepository {
+    + save(event: ActuationEvent): ActuationEvent
+    + findByDeviceAndPeriod(deviceId, from, to): List<ActuationEvent>
+    + findByDeviceAndActionAndOccurredAt(deviceId, action, occurredAt): Optional<ActuationEvent>
+    + findByEnvironmentAndPeriod(laboratoryId, environmentId, from, to): List<ActuationEvent>
+    + findLastReceivedAt(deviceId: Long): Optional<Instant>
   }
 }
 
-EquipmentTelemetryRepository --> EquipmentTelemetry
+EnvironmentalProfileRepository --> EnvironmentalProfile
 MeasurementRepository --> Measurement
-TelemetryHistoryPointRepository --> TelemetryHistoryPoint
-EquipmentTelemetryStatusRepository --> EquipmentTelemetryStatus
-
-package "tracking.domain.exceptions" {
-  class EquipmentTelemetryNotFoundException
-  class EquipmentTelemetryStatusNotFoundException
-  class InvalidTelemetryDataException
-  class MeasurementNotFoundException
-  class MeasurementsNotFoundForEquipmentException
-  class TelemetryHistoryNotFoundForEquipmentException
-  class TelemetryHistoryPointNotFoundException
-}
+ActuationEventRepository --> ActuationEvent
 
 package "tracking.application.commandservices" {
   interface TrackingCommandService {
-    + handle(command: RecordMeasurementCommand): Result<Long, ApplicationError>
-    + handle(command: RecordTelemetryHistoryPointCommand): Result<Long, ApplicationError>
-    + handle(command: UpdateEquipmentTelemetryStatusCommand): Result<Long, ApplicationError>
+    + handle(command: UpdateEnvironmentThresholdsCommand): Result<EnvironmentalProfile, ApplicationError>
+    + handle(command: UpdateContainerMonitorThresholdsCommand): Result<EnvironmentalProfile, ApplicationError>
+    + handle(command: UpdateActuationRulesCommand): Result<EnvironmentalProfile, ApplicationError>
+    + handle(command: RecordMeasurementCommand): Result<Recorded<Measurement>, ApplicationError>
+    + handle(command: RecordActuationEventCommand): Result<Recorded<ActuationEvent>, ApplicationError>
   }
-}
 
-package "tracking.application.queryservices" {
-  interface TrackingQueryService {
-    + handle(query: GetLatestMeasurementsQuery): List<Measurement>
-    + handle(query: GetEquipmentTelemetryStatusByEquipmentIdQuery): Optional<EquipmentTelemetryStatus>
-    + handle(query: GetTelemetryHistoryQuery): List<TelemetryHistoryPoint>
+  class Recorded <<record>> {
+    + value: T
+    + created: boolean
   }
 }
 
 TrackingCommandService ..> Result
 TrackingCommandService ..> ApplicationError
+TrackingCommandService +-- Recorded
+note bottom of Recorded
+  created = false when the same reading or action
+  (device, metric/action, moment) was already received.
+end note
+
+package "tracking.application.queryservices" {
+  interface TrackingQueryService {
+    + handle(query: GetEnvironmentProfileQuery): Optional<EnvironmentalProfile>
+    + handle(query: GetContainerMonitorProfileQuery): Optional<EnvironmentalProfile>
+    + handle(query: GetDeviceProfileQuery): Optional<EnvironmentalProfile>
+    + handle(query: GetMeasurementsQuery): Optional<List<Measurement>>
+    + handle(query: GetActuationEventsQuery): Optional<List<ActuationEvent>>
+    + handle(query: GetDeviceConnectionQuery): Optional<DeviceConnection>
+  }
+}
 
 package "tracking.application.internal.commandservices" {
   class TrackingCommandServiceImpl
 }
 
 TrackingCommandServiceImpl ..|> TrackingCommandService
+TrackingCommandServiceImpl --> EnvironmentalProfileRepository
 TrackingCommandServiceImpl --> MeasurementRepository
-TrackingCommandServiceImpl --> EquipmentTelemetryStatusRepository
-TrackingCommandServiceImpl --> TelemetryHistoryPointRepository
-TrackingCommandServiceImpl --> EquipmentTelemetryRepository
+TrackingCommandServiceImpl --> ActuationEventRepository
 TrackingCommandServiceImpl --> ApplicationEventPublisher
+TrackingCommandServiceImpl --> Clock
 TrackingCommandServiceImpl ..> MeasurementRecordedEvent
-TrackingCommandServiceImpl ..> TelemetryHistoryPointRecordedEvent
-TrackingCommandServiceImpl ..> TelemetryAnomalyDetectedEvent
-TrackingCommandServiceImpl ..> EquipmentTelemetryStatusUpdatedEvent
+TrackingCommandServiceImpl ..> EnvironmentalDeviationDetectedEvent
+TrackingCommandServiceImpl ..> EnvironmentalConditionNormalizedEvent : WARNING/CRITICAL -> NORMAL
+TrackingCommandServiceImpl ..> EnvironmentalProfileUpdatedEvent
+note right of TrackingCommandServiceImpl
+  The device must be located in the environment and report the metric.
+  A reading more than 5 minutes in the future is rejected (400).
+  The reading is evaluated with the profile in force; a deviation event is
+  published only when the state worsens against the previous reading
+  (NORMAL -> WARNING -> CRITICAL), so a sustained deviation is alerted once.
+end note
 
 package "tracking.application.internal.queryservices" {
   class TrackingQueryServiceImpl
 }
 
 TrackingQueryServiceImpl ..|> TrackingQueryService
+TrackingQueryServiceImpl --> EnvironmentalProfileRepository
 TrackingQueryServiceImpl --> MeasurementRepository
-TrackingQueryServiceImpl --> EquipmentTelemetryStatusRepository
-TrackingQueryServiceImpl --> TelemetryHistoryPointRepository
+TrackingQueryServiceImpl --> ActuationEventRepository
+TrackingQueryServiceImpl --> ExpectedCommunicationPeriod
+TrackingQueryServiceImpl ..> DeviceConnection
+note right of TrackingQueryServiceImpl
+  Last communication = latest reading or action received,
+  compared with the expected period
+  (tracking.devices.expected-communication-period, PT5M).
+end note
 
 package "tracking.application.internal.outboundservices.acl" {
-  class TrackingExternalAuditService {
-    + recordMeasurementAudit(measurementId: Long, equipmentId: Long): boolean
-    + recordStatusUpdateAudit(statusId: Long, equipmentId: Long): boolean
-    + recordHistoryPointAudit(historyPointId: Long, equipmentId: Long): boolean
-  }
-
-  class TrackingExternalComplianceService {
-    + createTelemetryDeviationAlert(equipmentId: Long, parameterName: String, recordedValue: Double, thresholdValue: Double, unit: String, timestamp: String, severity: AlertSeverity): boolean
-  }
-
   class TrackingExternalEquipmentService {
-    + existsEquipmentById(equipmentId: Long): boolean
-    + findBpmConfigByEquipmentAndParameter(equipmentId: Long, parameterName: String): Optional<BpmParameterConfig>
-    + isTelemetryValueOutOfRange(equipmentId: Long, parameterName: String, value: Double): boolean
-    + resolveExceededThreshold(equipmentId: Long, parameterName: String, value: Double): Optional<Double>
+    + findDevice(laboratoryId, environmentId, deviceId): Optional<DeviceReference>
+    + findEnvironmentalDevice(laboratoryId, environmentId): Optional<DeviceReference>
+    + findContainerMonitor(laboratoryId, environmentId, deviceId): Optional<DeviceReference>
   }
 }
 
-TrackingExternalAuditService --> RaContextFacade
-TrackingExternalComplianceService --> CaCommandService
-TrackingExternalEquipmentService --> EquipmentRepository
-TrackingExternalEquipmentService --> BpmParameterConfigRepository
-TrackingExternalEquipmentService --> BpmParameterConfig
+TrackingCommandServiceImpl --> TrackingExternalEquipmentService
+TrackingQueryServiceImpl --> TrackingExternalEquipmentService
+
+TrackingExternalEquipmentService --> EquipmentContextFacade
 
 package "tracking.application.internal.eventhandlers" {
   class MeasurementRecordedEventHandler
-  class TelemetryHistoryPointRecordedEventHandler
-  class TelemetryAnomalyDetectedEventHandler
-  class EquipmentTelemetryStatusUpdatedEventHandler
+  class EnvironmentalDeviationDetectedEventHandler
+  class EnvironmentalConditionNormalizedEventHandler
+  class EnvironmentalProfileUpdatedEventHandler
 }
 
 MeasurementRecordedEventHandler ..> MeasurementRecordedEvent
-TelemetryHistoryPointRecordedEventHandler ..> TelemetryHistoryPointRecordedEvent
-TelemetryAnomalyDetectedEventHandler ..> TelemetryAnomalyDetectedEvent
-EquipmentTelemetryStatusUpdatedEventHandler ..> EquipmentTelemetryStatusUpdatedEvent
+EnvironmentalDeviationDetectedEventHandler ..> EnvironmentalDeviationDetectedEvent
+EnvironmentalConditionNormalizedEventHandler ..> EnvironmentalConditionNormalizedEvent
+EnvironmentalConditionNormalizedEventHandler --> ApplicationEventPublisher
+EnvironmentalProfileUpdatedEventHandler ..> EnvironmentalProfileUpdatedEvent
+MeasurementRecordedEventHandler --> ApplicationEventPublisher
+EnvironmentalDeviationDetectedEventHandler --> ApplicationEventPublisher
+EnvironmentalProfileUpdatedEventHandler --> ApplicationEventPublisher
 
-MeasurementRecordedEventHandler --> TrackingExternalAuditService
-TelemetryHistoryPointRecordedEventHandler --> TrackingExternalAuditService
-TelemetryAnomalyDetectedEventHandler --> TrackingExternalComplianceService
-TelemetryAnomalyDetectedEventHandler --> TrackingExternalEquipmentService
-EquipmentTelemetryStatusUpdatedEventHandler --> TrackingExternalAuditService
+package "tracking.interfaces.events" {
+  class MeasurementRecordedIntegrationEvent <<record>>
+  class EnvironmentalDeviationDetectedIntegrationEvent <<record>>
+  class EnvironmentalConditionNormalizedIntegrationEvent <<record>>
+  class EnvironmentalProfileUpdatedIntegrationEvent <<record>>
+}
+
+package "tracking.interfaces.acl" {
+  interface TrackingContextFacade {
+    + findActuations(laboratoryId, deviceId, metric, from, to): List<ActuationReference>
+    + findEnvironmentActuations(laboratoryId, environmentId, from, to): List<ActuationReference>
+    + findMeasurements(laboratoryId, environmentId, from, to): List<MeasurementReference>
+  }
+  class ActuationReference <<record>>
+  class MeasurementReference <<record>> {
+    + id: Long
+    + deviceId: Long
+    + metric: String
+    + value: Double
+    + unit: String
+    + state: String
+    + measuredAt: Instant
+  }
+}
 
 package "tracking.application.acl" {
   class TrackingContextFacadeImpl
 }
 
-package "tracking.interfaces.acl" {
-  interface TrackingContextFacade {
-    + getLatestMeasurementsByEquipmentId(equipmentId: Long): List<Measurement>
-    + getEquipmentStatusByEquipmentId(equipmentId: Long): Optional<EquipmentTelemetryStatus>
-    + getTelemetryHistoryByEquipmentId(equipmentId: Long): List<TelemetryHistoryPoint>
-    + hasAnomaliesByEquipmentId(equipmentId: Long): boolean
+TrackingContextFacadeImpl ..|> TrackingContextFacade
+TrackingContextFacadeImpl --> ActuationEventRepository
+TrackingContextFacadeImpl --> MeasurementRepository
+TrackingContextFacade ..> ActuationReference
+TrackingContextFacade ..> MeasurementReference
+note bottom of TrackingContextFacade
+  Readings and actions of an environment in a period, read by Reporting
+  for the indicators and the environmental report (US93-US95).
+end note
+
+MeasurementRecordedEventHandler ..> MeasurementRecordedIntegrationEvent
+EnvironmentalDeviationDetectedEventHandler ..> EnvironmentalDeviationDetectedIntegrationEvent
+EnvironmentalConditionNormalizedEventHandler ..> EnvironmentalConditionNormalizedIntegrationEvent
+EnvironmentalProfileUpdatedEventHandler ..> EnvironmentalProfileUpdatedIntegrationEvent
+
+package "integration event consumers" <<External>> {
+  class EnvironmentalDeviationComplianceEventHandler <<ca>>
+  class EnvironmentalConditionNormalizedComplianceEventHandler <<ca>>
+  class CaExternalTrackingService <<ca>>
+  class TrackingAuditEventHandler <<ra>>
+}
+
+EnvironmentalDeviationComplianceEventHandler ..> EnvironmentalDeviationDetectedIntegrationEvent
+EnvironmentalConditionNormalizedComplianceEventHandler ..> EnvironmentalConditionNormalizedIntegrationEvent
+CaExternalTrackingService --> TrackingContextFacade : actions related to an alert
+TrackingAuditEventHandler ..> EnvironmentalProfileUpdatedIntegrationEvent
+note bottom of EnvironmentalDeviationComplianceEventHandler
+  Opens the WARNING / CRITICAL alert of the incident, or adds the
+  deviation to the alert still open for the device and metric.
+end note
+note bottom of TrackingAuditEventHandler
+  Audits UPDATE ENVIRONMENTAL_PROFILE.
+end note
+
+package "tracking.infrastructure.configuration" {
+  class TrackingConfiguration {
+    + trackingClock(): Clock
+    + expectedCommunicationPeriod(period: Duration): ExpectedCommunicationPeriod
   }
 }
 
-TrackingContextFacadeImpl ..|> TrackingContextFacade
-TrackingContextFacadeImpl --> TrackingQueryService
-
-package "tracking.interfaces.events" {
-  class MeasurementRecordedIntegrationEvent <<record>>
-  class TelemetryHistoryPointRecordedIntegrationEvent <<record>>
-  class TelemetryAnomalyDetectedIntegrationEvent <<record>>
-  class EquipmentTelemetryStatusUpdatedIntegrationEvent <<record>>
-}
-
-EquipmentTelemetryStatusUpdatedIntegrationEvent --> TelemetryStatus
-MeasurementRecordedEventHandler ..> MeasurementRecordedIntegrationEvent
-TelemetryHistoryPointRecordedEventHandler ..> TelemetryHistoryPointRecordedIntegrationEvent
-TelemetryAnomalyDetectedEventHandler ..> TelemetryAnomalyDetectedIntegrationEvent
-EquipmentTelemetryStatusUpdatedEventHandler ..> EquipmentTelemetryStatusUpdatedIntegrationEvent
+TrackingConfiguration ..> Clock
+TrackingConfiguration ..> ExpectedCommunicationPeriod
 
 package "tracking.infrastructure.persistence.jpa.entities" {
-  class EquipmentTelemetryPersistenceEntity
+  class EnvironmentalProfilePersistenceEntity
+  class ThresholdEmbeddable <<embeddable>>
+  class ActuationRuleEmbeddable <<embeddable>>
   class MeasurementPersistenceEntity
-  class TelemetryHistoryPointPersistenceEntity
-  class EquipmentTelemetryStatusPersistenceEntity
+  class ActuationEventPersistenceEntity
 }
 
-EquipmentTelemetryPersistenceEntity --|> AuditableAbstractPersistenceEntity
+EnvironmentalProfilePersistenceEntity --|> AuditableAbstractPersistenceEntity
 MeasurementPersistenceEntity --|> AuditableAbstractPersistenceEntity
-TelemetryHistoryPointPersistenceEntity --|> AuditableAbstractPersistenceEntity
-EquipmentTelemetryStatusPersistenceEntity --|> AuditableAbstractPersistenceEntity
-EquipmentTelemetryStatusPersistenceEntity --> TelemetryStatus
+ActuationEventPersistenceEntity --|> AuditableAbstractPersistenceEntity
+EnvironmentalProfilePersistenceEntity *-- ThresholdEmbeddable
+EnvironmentalProfilePersistenceEntity *-- ActuationRuleEmbeddable
 
 package "tracking.infrastructure.persistence.jpa.repositories" {
-  interface EquipmentTelemetryPersistenceRepository
+  interface EnvironmentalProfilePersistenceRepository
   interface MeasurementPersistenceRepository
-  interface TelemetryHistoryPointPersistenceRepository
-  interface EquipmentTelemetryStatusPersistenceRepository
+  interface ActuationEventPersistenceRepository
 }
 
-EquipmentTelemetryPersistenceRepository --|> JpaRepository
+EnvironmentalProfilePersistenceRepository --|> JpaRepository
 MeasurementPersistenceRepository --|> JpaRepository
-TelemetryHistoryPointPersistenceRepository --|> JpaRepository
-EquipmentTelemetryStatusPersistenceRepository --|> JpaRepository
-
-EquipmentTelemetryPersistenceRepository --> EquipmentTelemetryPersistenceEntity
+ActuationEventPersistenceRepository --|> JpaRepository
+EnvironmentalProfilePersistenceRepository --> EnvironmentalProfilePersistenceEntity
 MeasurementPersistenceRepository --> MeasurementPersistenceEntity
-TelemetryHistoryPointPersistenceRepository --> TelemetryHistoryPointPersistenceEntity
-EquipmentTelemetryStatusPersistenceRepository --> EquipmentTelemetryStatusPersistenceEntity
+ActuationEventPersistenceRepository --> ActuationEventPersistenceEntity
 
 package "tracking.infrastructure.persistence.jpa.assemblers" {
-  class EquipmentTelemetryPersistenceAssembler
+  class EnvironmentalProfilePersistenceAssembler
   class MeasurementPersistenceAssembler
-  class TelemetryHistoryPointPersistenceAssembler
-  class EquipmentTelemetryStatusPersistenceAssembler
+  class ActuationEventPersistenceAssembler
 }
 
-EquipmentTelemetryPersistenceAssembler ..> EquipmentTelemetry
-EquipmentTelemetryPersistenceAssembler ..> EquipmentTelemetryPersistenceEntity
+EnvironmentalProfilePersistenceAssembler ..> EnvironmentalProfile
+EnvironmentalProfilePersistenceAssembler ..> EnvironmentalProfilePersistenceEntity
 MeasurementPersistenceAssembler ..> Measurement
 MeasurementPersistenceAssembler ..> MeasurementPersistenceEntity
-TelemetryHistoryPointPersistenceAssembler ..> TelemetryHistoryPoint
-TelemetryHistoryPointPersistenceAssembler ..> TelemetryHistoryPointPersistenceEntity
-EquipmentTelemetryStatusPersistenceAssembler ..> EquipmentTelemetryStatus
-EquipmentTelemetryStatusPersistenceAssembler ..> EquipmentTelemetryStatusPersistenceEntity
+ActuationEventPersistenceAssembler ..> ActuationEvent
+ActuationEventPersistenceAssembler ..> ActuationEventPersistenceEntity
 
 package "tracking.infrastructure.persistence.jpa.adapters" {
-  class EquipmentTelemetryRepositoryImpl
+  class EnvironmentalProfileRepositoryImpl
   class MeasurementRepositoryImpl
-  class TelemetryHistoryPointRepositoryImpl
-  class EquipmentTelemetryStatusRepositoryImpl
+  class ActuationEventRepositoryImpl
 }
 
-EquipmentTelemetryRepositoryImpl ..|> EquipmentTelemetryRepository
+EnvironmentalProfileRepositoryImpl ..|> EnvironmentalProfileRepository
 MeasurementRepositoryImpl ..|> MeasurementRepository
-TelemetryHistoryPointRepositoryImpl ..|> TelemetryHistoryPointRepository
-EquipmentTelemetryStatusRepositoryImpl ..|> EquipmentTelemetryStatusRepository
-
-EquipmentTelemetryRepositoryImpl --> EquipmentTelemetryPersistenceRepository
-EquipmentTelemetryRepositoryImpl --> EquipmentTelemetryPersistenceAssembler
+ActuationEventRepositoryImpl ..|> ActuationEventRepository
+EnvironmentalProfileRepositoryImpl --> EnvironmentalProfilePersistenceRepository
+EnvironmentalProfileRepositoryImpl --> EnvironmentalProfilePersistenceAssembler
 MeasurementRepositoryImpl --> MeasurementPersistenceRepository
 MeasurementRepositoryImpl --> MeasurementPersistenceAssembler
-TelemetryHistoryPointRepositoryImpl --> TelemetryHistoryPointPersistenceRepository
-TelemetryHistoryPointRepositoryImpl --> TelemetryHistoryPointPersistenceAssembler
-EquipmentTelemetryStatusRepositoryImpl --> EquipmentTelemetryStatusPersistenceRepository
-EquipmentTelemetryStatusRepositoryImpl --> EquipmentTelemetryStatusPersistenceAssembler
-
-package "tracking.infrastructure.persistence.jpa.converters" {
-  class TelemetryStatusPersistenceConverter
-}
-
-TelemetryStatusPersistenceConverter ..|> AttributeConverter
-TelemetryStatusPersistenceConverter ..> TelemetryStatus
+ActuationEventRepositoryImpl --> ActuationEventPersistenceRepository
+ActuationEventRepositoryImpl --> ActuationEventPersistenceAssembler
 
 package "tracking.interfaces.rest.resources" {
-  class MeasurementResource <<record>>
-  class EquipmentTelemetryStatusResource <<record>>
-  class TelemetryHistoryPointResource <<record>>
+  class ThresholdResource <<record>>
+  class UpdateThresholdsResource <<record>>
+  class ActuationRuleResource <<record>>
+  class UpdateActuationRulesResource <<record>>
+  class EnvironmentalProfileResource <<record>>
   class RecordMeasurementResource <<record>>
-  class UpdateEquipmentTelemetryStatusResource <<record>>
-  class RecordTelemetryHistoryPointResource <<record>>
+  class MeasurementResource <<record>>
+  class RecordActuationEventResource <<record>>
+  class ActuationEventResource <<record>>
+  class DeviceTelemetryStatusResource <<record>>
 }
 
-EquipmentTelemetryStatusResource --> TelemetryStatus
-UpdateEquipmentTelemetryStatusResource --> TelemetryStatus
+UpdateThresholdsResource *-- ThresholdResource
+UpdateActuationRulesResource *-- ActuationRuleResource
+EnvironmentalProfileResource *-- ThresholdResource
+EnvironmentalProfileResource *-- ActuationRuleResource
 
 package "tracking.interfaces.rest.transform" {
-  class MeasurementResourceFromEntityAssembler
-  class EquipmentTelemetryStatusResourceFromEntityAssembler
-  class TelemetryHistoryPointResourceFromEntityAssembler
+  class TrackingRequestValues
+  class EnvironmentalProfileCommandFromResourceAssembler
+  class EnvironmentalProfileResourceFromEntityAssembler
   class RecordMeasurementCommandFromResourceAssembler
-  class UpdateEquipmentTelemetryStatusCommandFromResourceAssembler
-  class RecordTelemetryHistoryPointCommandFromResourceAssembler
+  class MeasurementResourceFromEntityAssembler
+  class RecordActuationEventCommandFromResourceAssembler
+  class ActuationEventResourceFromEntityAssembler
+  class TelemetryResponseAssembler {
+    + {static} toRecordedResponse(result, mapper): ResponseEntity
+    + {static} period(from, to): Instant[]
+    + {static} metric(value): MonitoredMetric
+  }
 }
 
-MeasurementResourceFromEntityAssembler ..> Measurement
-MeasurementResourceFromEntityAssembler ..> MeasurementResource
-EquipmentTelemetryStatusResourceFromEntityAssembler ..> EquipmentTelemetryStatus
-EquipmentTelemetryStatusResourceFromEntityAssembler ..> EquipmentTelemetryStatusResource
-TelemetryHistoryPointResourceFromEntityAssembler ..> TelemetryHistoryPoint
-TelemetryHistoryPointResourceFromEntityAssembler ..> TelemetryHistoryPointResource
+EnvironmentalProfileCommandFromResourceAssembler ..> UpdateThresholdsResource
+EnvironmentalProfileCommandFromResourceAssembler ..> UpdateActuationRulesResource
+EnvironmentalProfileCommandFromResourceAssembler ..> UpdateEnvironmentThresholdsCommand
+EnvironmentalProfileCommandFromResourceAssembler ..> UpdateContainerMonitorThresholdsCommand
+EnvironmentalProfileCommandFromResourceAssembler ..> UpdateActuationRulesCommand
+EnvironmentalProfileCommandFromResourceAssembler ..> TrackingRequestValues
+EnvironmentalProfileResourceFromEntityAssembler ..> EnvironmentalProfile
+EnvironmentalProfileResourceFromEntityAssembler ..> EnvironmentalProfileResource
 RecordMeasurementCommandFromResourceAssembler ..> RecordMeasurementResource
 RecordMeasurementCommandFromResourceAssembler ..> RecordMeasurementCommand
-UpdateEquipmentTelemetryStatusCommandFromResourceAssembler ..> UpdateEquipmentTelemetryStatusResource
-UpdateEquipmentTelemetryStatusCommandFromResourceAssembler ..> UpdateEquipmentTelemetryStatusCommand
-RecordTelemetryHistoryPointCommandFromResourceAssembler ..> RecordTelemetryHistoryPointResource
-RecordTelemetryHistoryPointCommandFromResourceAssembler ..> RecordTelemetryHistoryPointCommand
+RecordMeasurementCommandFromResourceAssembler ..> TrackingRequestValues
+MeasurementResourceFromEntityAssembler ..> Measurement
+MeasurementResourceFromEntityAssembler ..> MeasurementResource
+RecordActuationEventCommandFromResourceAssembler ..> RecordActuationEventResource
+RecordActuationEventCommandFromResourceAssembler ..> RecordActuationEventCommand
+RecordActuationEventCommandFromResourceAssembler ..> TrackingRequestValues
+ActuationEventResourceFromEntityAssembler ..> ActuationEvent
+ActuationEventResourceFromEntityAssembler ..> ActuationEventResource
+TelemetryResponseAssembler ..> ResponseEntityAssembler
+note bottom of TelemetryResponseAssembler
+  201 Created for a new reading/action, 200 OK when it was already received.
+  Period: last 24 hours by default, 31 days at most.
+end note
 
 package "tracking.interfaces.rest" {
-  class TelemetryController
+  class EnvironmentTelemetryController
+  class ContainerMonitorTelemetryController
+  class DeviceTrackingController
 }
 
-TelemetryController --> TrackingCommandService
-TelemetryController --> TrackingQueryService
-TelemetryController ..> ResponseEntityAssembler
-TelemetryController ..> MeasurementResourceFromEntityAssembler
-TelemetryController ..> EquipmentTelemetryStatusResourceFromEntityAssembler
-TelemetryController ..> TelemetryHistoryPointResourceFromEntityAssembler
-TelemetryController ..> RecordMeasurementCommandFromResourceAssembler
-TelemetryController ..> UpdateEquipmentTelemetryStatusCommandFromResourceAssembler
-TelemetryController ..> RecordTelemetryHistoryPointCommandFromResourceAssembler
+EnvironmentTelemetryController --> TrackingCommandService
+EnvironmentTelemetryController --> TrackingQueryService
+EnvironmentTelemetryController ..> CurrentUser
+EnvironmentTelemetryController ..> EnvironmentalProfileCommandFromResourceAssembler
+EnvironmentTelemetryController ..> EnvironmentalProfileResourceFromEntityAssembler
+EnvironmentTelemetryController ..> RecordMeasurementCommandFromResourceAssembler
+EnvironmentTelemetryController ..> MeasurementResourceFromEntityAssembler
+EnvironmentTelemetryController ..> TelemetryResponseAssembler
+note bottom of EnvironmentTelemetryController
+  /api/v1/laboratories/{laboratoryId}/environments/{environmentId}
+  GET  /environmental-profile                (profile view, 404 if not configured)
+  PUT  /environmental-profile/thresholds     (TS42, QA_MANAGER / ADMIN)
+  POST /telemetry-measurements               (TS54)
+  GET  /telemetry-measurements?from&to&metric (TS58)
+end note
+
+ContainerMonitorTelemetryController --> TrackingCommandService
+ContainerMonitorTelemetryController --> TrackingQueryService
+ContainerMonitorTelemetryController ..> CurrentUser
+ContainerMonitorTelemetryController ..> EnvironmentalProfileCommandFromResourceAssembler
+ContainerMonitorTelemetryController ..> EnvironmentalProfileResourceFromEntityAssembler
+ContainerMonitorTelemetryController ..> RecordMeasurementCommandFromResourceAssembler
+ContainerMonitorTelemetryController ..> MeasurementResourceFromEntityAssembler
+ContainerMonitorTelemetryController ..> RecordActuationEventCommandFromResourceAssembler
+ContainerMonitorTelemetryController ..> ActuationEventResourceFromEntityAssembler
+ContainerMonitorTelemetryController ..> TelemetryResponseAssembler
+note bottom of ContainerMonitorTelemetryController
+  /api/v1/laboratories/{laboratoryId}/environments/{environmentId}
+      /container-monitors/{deviceId}
+  GET  /environmental-profile                  (profile view, 404 if not configured)
+  PUT  /environmental-profile/thresholds       (TS43, TS44, QA_MANAGER / ADMIN)
+  PUT  /environmental-profile/actuation-rules  (TS45, QA_MANAGER / ADMIN)
+  POST /telemetry-measurements                 (TS55)
+  GET  /telemetry-measurements?from&to&metric  (TS59)
+  POST /actuation-events                       (TS56)
+  GET  /actuation-events?from&to               (TS60)
+end note
+
+DeviceTrackingController --> TrackingQueryService
+DeviceTrackingController ..> DeviceTelemetryStatusResource
+DeviceTrackingController ..> EnvironmentalProfileResourceFromEntityAssembler
+note bottom of DeviceTrackingController
+  /api/v1/laboratories/{laboratoryId}/environments/{environmentId}
+      /devices/{deviceId}
+  GET /telemetry-status        (TS41)
+  GET /environmental-profile   (TS57, profile synchronized by the Edge)
+end note
 
 @enduml
