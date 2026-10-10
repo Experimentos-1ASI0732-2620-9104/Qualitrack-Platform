@@ -17,6 +17,7 @@ package "shared" {
       +notFound(resourceType: String, identifier: Object): ApplicationError
       +businessRuleViolation(rule: String, reason: String): ApplicationError
       +conflict(resource: String, reason: String): ApplicationError
+      +externalServiceFailure(service: String, reason: String): ApplicationError
       +unexpected(context: String, reason: String): ApplicationError
     }
 
@@ -39,6 +40,33 @@ package "shared" {
 
     record Failure<T, E> {
       +error: E
+    }
+  }
+
+  package "application.notifications" {
+    interface EmailSender {
+      +send(message: EmailMessage): boolean
+    }
+
+    record EmailMessage {
+      +to: String
+      +subject: String
+      +text: String
+    }
+  }
+
+  package "infrastructure.notifications.email" {
+    class ResendEmailSender {
+      +isConfigured(): boolean
+      +send(message: EmailMessage): boolean
+    }
+
+    class SmtpEmailSender {
+      +send(message: EmailMessage): boolean
+    }
+
+    class ConfiguredEmailSender <<primary>> {
+      +send(message: EmailMessage): boolean
     }
   }
 
@@ -96,10 +124,6 @@ package "shared" {
       +details: String
       +ErrorResource(code: String, message: String)
     }
-
-    record MessageResource {
-      +message: String
-    }
   }
 
   package "interfaces.rest.transform" {
@@ -123,6 +147,12 @@ package "shared" {
   package "interfaces.rest" {
     class GlobalExceptionHandler {
       -MESSAGES_BASENAME: String
+      +handleMalformedRequest(ex: Exception): ResponseEntity<?>
+      +handleApplicationException(ex: ApplicationException): ResponseEntity<?>
+      +handleAccessDenied(ex: AccessDeniedException): ResponseEntity<?>
+      +handleNoResourceFound(ex: NoResourceFoundException): ResponseEntity<?>
+      +handleMethodNotSupported(ex: HttpRequestMethodNotSupportedException): ResponseEntity<?>
+      +handleMediaTypeNotSupported(ex: HttpMediaTypeNotSupportedException): ResponseEntity<?>
       +handleMethodArgumentNotValid(ex: MethodArgumentNotValidException): ResponseEntity<?>
       +handleIllegalArgumentException(ex: IllegalArgumentException): ResponseEntity<?>
       +handleRuntimeException(ex: RuntimeException): ResponseEntity<?>
@@ -134,6 +164,18 @@ package "shared" {
 
 Result <|.. Success
 Result <|.. Failure
+
+EmailSender ..> EmailMessage
+ResendEmailSender ..|> EmailSender
+SmtpEmailSender ..|> EmailSender
+ConfiguredEmailSender ..|> EmailSender
+ConfiguredEmailSender --> ResendEmailSender
+ConfiguredEmailSender --> SmtpEmailSender
+note bottom of ConfiguredEmailSender
+  Transactional e-mails (staff credentials, password recovery codes):
+  Resend API (POST /emails over HTTPS) when RESEND_API_KEY is set,
+  otherwise the SMTP server of spring.mail.*; without either nothing is sent.
+end note
 
 AbstractDomainAggregateRoot --|> AbstractAggregateRoot
 AuditableAbstractPersistenceEntity ..> AuditingEntityListener
@@ -164,5 +206,10 @@ GlobalExceptionHandler ..> ErrorResponseAssembler
 GlobalExceptionHandler ..> MethodArgumentNotValidException
 GlobalExceptionHandler ..> LocaleContextHolder
 GlobalExceptionHandler ..> ResourceBundle
+note bottom of GlobalExceptionHandler
+  Errors answer the standard ErrorResource body: 400 invalid request, 403 ACCESS_DENIED,
+  404 RESOURCE_NOT_FOUND for unknown routes, 405 METHOD_NOT_ALLOWED with Allow,
+  415 UNSUPPORTED_MEDIA_TYPE, 409 conflicts and 500 unexpected errors.
+end note
 
 @enduml
