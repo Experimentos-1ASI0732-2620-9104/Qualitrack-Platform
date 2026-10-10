@@ -15,7 +15,6 @@ public class UpdateNotificationPreferenceCommandFromResourceAssembler {
         return new UpdateNotificationPreferenceCommand(
                 userId,
                 resource.emailEnabled(),
-                resource.smsEnabled(),
                 resource.inAppEnabled(),
                 resource.minimumSeverity()
         );
