@@ -13,7 +13,6 @@ public class NotificationPreferenceResourceFromEntityAssembler {
                 entity.getId(),
                 entity.getUserId(),
                 entity.getEmailEnabled(),
-                entity.getSmsEnabled(),
                 entity.getInAppEnabled(),
                 entity.getMinimumSeverity()
         );
