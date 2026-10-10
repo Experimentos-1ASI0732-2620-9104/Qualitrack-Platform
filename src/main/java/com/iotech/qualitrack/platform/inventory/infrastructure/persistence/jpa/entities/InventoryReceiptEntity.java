@@ -23,4 +23,9 @@ public class InventoryReceiptEntity extends AuditableAbstractPersistenceEntity {
     @Column(nullable = false) private LocalDate receivedOn;
     @Column(nullable = false) private LocalDate expiresOn;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private RawMaterialBatchStatus status;
+    /** Container monitor of the monitored container where the lot is stored (US43). */
+    @Column(name = "container_monitor_id") private Long containerMonitorId;
+    @Column(name = "container_environment_id") private Long containerEnvironmentId;
+    @Column(name = "container_assigned_by") private Long containerAssignedBy;
+    @Column(name = "container_assigned_at") private java.time.Instant containerAssignedAt;
 }
