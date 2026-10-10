@@ -6,6 +6,7 @@ import com.iotech.qualitrack.platform.ca.infrastructure.persistence.jpa.assemble
 import com.iotech.qualitrack.platform.ca.infrastructure.persistence.jpa.repositories.NotificationPreferencePersistenceRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +35,14 @@ public class NotificationPreferenceRepositoryImpl implements NotificationPrefere
     public Optional<NotificationPreference> findByUserId(Long userId) {
         return repository.findByUserId(userId)
                 .map(NotificationPreferencePersistenceAssembler::toDomainFromPersistence);
+    }
+
+    @Override
+    public List<NotificationPreference> findByUserIds(Collection<Long> userIds) {
+        if (userIds.isEmpty()) return List.of();
+        return repository.findByUserIdIn(userIds).stream()
+                .map(NotificationPreferencePersistenceAssembler::toDomainFromPersistence)
+                .toList();
     }
 
     @Override
