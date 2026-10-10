@@ -52,6 +52,12 @@ public class TokenServiceImpl implements TokenService {
     }
 
     @Override
+    public Long getUserIdFromToken(String token) {
+        var userId = getClaims(token).get("userId");
+        return userId instanceof Number number ? number.longValue() : null;
+    }
+
+    @Override
     public boolean validateToken(String token) {
         try {
             getClaims(token);
