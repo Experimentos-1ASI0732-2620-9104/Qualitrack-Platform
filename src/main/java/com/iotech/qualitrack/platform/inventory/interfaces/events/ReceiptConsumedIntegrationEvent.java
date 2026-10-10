@@ -5,4 +5,4 @@ import java.time.Instant;
 
 public record ReceiptConsumedIntegrationEvent(Long receiptId, Long materialId, String materialName,
         Long productBatchId, BigDecimal amount, String unit, BigDecimal stockBefore,
-        BigDecimal stockAfter, Instant occurredAt) { }
+        BigDecimal stockAfter, Instant occurredAt, String operationId) { }
