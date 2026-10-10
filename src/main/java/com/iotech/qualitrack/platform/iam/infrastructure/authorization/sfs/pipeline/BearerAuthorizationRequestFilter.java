@@ -57,7 +57,8 @@ public class BearerAuthorizationRequestFilter extends OncePerRequestFilter {
         try {
             var username = tokenService.getUsernameFromToken(token);
             var userDetails = (UserDetailsImpl) userDetailsService.loadUserByUsername(username);
-            if (userDetails.isEnabled()) {
+            // Usernames can change: a token issued to another account that used this username is not valid.
+            if (userDetails.isEnabled() && userDetails.getId().equals(tokenService.getUserIdFromToken(token))) {
                 SecurityContextHolder.getContext().setAuthentication(
                         UsernamePasswordAuthenticationTokenBuilder.build(userDetails));
             }
