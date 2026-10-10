@@ -1,7 +1,6 @@
 package com.iotech.qualitrack.platform.batch.domain.repositories;
 
 import com.iotech.qualitrack.platform.batch.domain.model.aggregates.Batch;
-import com.iotech.qualitrack.platform.batch.domain.model.valueobjects.BatchStatus;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,21 +13,16 @@ import java.util.Optional;
 public interface BatchRepository {
 
     Optional<Batch> findById(Long id);
-    Optional<Batch> findByIdForUpdate(Long id);
 
-    List<Batch> findAll();
+    Optional<Batch> findByIdForUpdate(Long id);
 
     List<Batch> findAllByLabId(Long labId);
 
-    List<Batch> findAllByStatus(BatchStatus status);
-
-    Optional<Batch> findByBatchNumber(String batchNumber);
+    List<Batch> findAllByProductId(Long productId);
 
     Batch save(Batch batch);
 
     boolean existsById(Long id);
 
-    boolean existsByBatchNumber(String batchNumber);
-
-    void deleteById(Long id);
+    boolean existsByLabIdAndBatchNumber(Long labId, String batchNumber);
 }

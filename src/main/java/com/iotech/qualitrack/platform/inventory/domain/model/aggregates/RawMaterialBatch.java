@@ -1,5 +1,7 @@
 package com.iotech.qualitrack.platform.inventory.domain.model.aggregates;
 
+import com.iotech.qualitrack.platform.inventory.domain.model.valueobjects.ContainerAssignment;
+import com.iotech.qualitrack.platform.inventory.domain.model.valueobjects.ExpirationStatus;
 import com.iotech.qualitrack.platform.inventory.domain.model.valueobjects.RawMaterialBatchStatus;
 import com.iotech.qualitrack.platform.shared.domain.model.aggregates.AbstractDomainAggregateRoot;
 import com.iotech.qualitrack.platform.shared.domain.model.valueobjects.StockUnit;
@@ -8,6 +10,7 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Objects;
+import java.util.Optional;
 
 /** A supplier receipt, not a manufactured product batch. */
 @Getter
@@ -23,12 +26,23 @@ public class RawMaterialBatch extends AbstractDomainAggregateRoot<RawMaterialBat
     private final LocalDate receivedOn;
     private final LocalDate expiresOn;
     private RawMaterialBatchStatus status;
+    /** Monitored container where the lot is stored; null while it has no container (US43, US44). */
+    private ContainerAssignment containerAssignment;
 
     /** Reconstructs a receipt; quality review authorization is enforced at the API boundary. */
     public RawMaterialBatch(Long id, Long laboratoryId, Long rawMaterialId, String supplier,
                             String batchNumber, String unit, BigDecimal initialAmount,
                             BigDecimal availableAmount, LocalDate receivedOn, LocalDate expiresOn,
                             RawMaterialBatchStatus status) {
+        this(id, laboratoryId, rawMaterialId, supplier, batchNumber, unit, initialAmount, availableAmount, receivedOn,
+                expiresOn, status, null);
+    }
+
+    /** Reconstructs a receipt together with the container where it is stored. */
+    public RawMaterialBatch(Long id, Long laboratoryId, Long rawMaterialId, String supplier,
+                            String batchNumber, String unit, BigDecimal initialAmount,
+                            BigDecimal availableAmount, LocalDate receivedOn, LocalDate expiresOn,
+                            RawMaterialBatchStatus status, ContainerAssignment containerAssignment) {
         if (id != null && id <= 0) throw new IllegalArgumentException("Invalid receipt ID");
         if (laboratoryId == null || laboratoryId <= 0) throw new IllegalArgumentException("Invalid laboratory ID");
         if (rawMaterialId == null || rawMaterialId <= 0) throw new IllegalArgumentException("Invalid material ID");
@@ -51,6 +65,7 @@ public class RawMaterialBatch extends AbstractDomainAggregateRoot<RawMaterialBat
         this.initialAmount = initialAmount;
         this.availableAmount = availableAmount;
         this.status = Objects.requireNonNull(status, "Receipt status is required");
+        this.containerAssignment = containerAssignment;
     }
 
     /** A newly received lot requires review before consumption. */
@@ -66,6 +81,17 @@ public class RawMaterialBatch extends AbstractDomainAggregateRoot<RawMaterialBat
         Objects.requireNonNull(onDate, "Reference date is required");
         return status == RawMaterialBatchStatus.RELEASED && availableAmount.signum() > 0
                 && !onDate.isBefore(receivedOn) && onDate.isBefore(expiresOn);
+    }
+
+    /**
+     * Classifies the expiration of the lot on a business date.
+     * A lot is near expiry when it expires within the next {@code nearExpiryDays} days and is not yet expired.
+     */
+    public ExpirationStatus expirationStatus(LocalDate onDate, int nearExpiryDays) {
+        Objects.requireNonNull(onDate, "Reference date is required");
+        if (nearExpiryDays < 0) throw new IllegalArgumentException("Near expiry days cannot be negative");
+        if (!onDate.isBefore(expiresOn)) return ExpirationStatus.EXPIRED;
+        return expiresOn.isAfter(onDate.plusDays(nearExpiryDays)) ? ExpirationStatus.VALID : ExpirationStatus.NEAR_EXPIRY;
     }
 
     public void release() {
@@ -87,6 +113,24 @@ public class RawMaterialBatch extends AbstractDomainAggregateRoot<RawMaterialBat
             throw new IllegalStateException("Receipt is already rejected");
         }
         status = RawMaterialBatchStatus.REJECTED;
+    }
+
+    /**
+     * Stores the lot in a monitored container, replacing the previous one (US43).
+     *
+     * @param assignment the container, its environment and who stored the lot
+     * @return false when the lot was already stored in that container
+     */
+    public boolean storeIn(ContainerAssignment assignment) {
+        Objects.requireNonNull(assignment, "Container assignment is required");
+        if (containerAssignment != null && containerAssignment.isIn(assignment.containerMonitorId())) return false;
+        containerAssignment = assignment;
+        return true;
+    }
+
+    /** @return the container where the lot is stored, if any (US44) */
+    public Optional<ContainerAssignment> container() {
+        return Optional.ofNullable(containerAssignment);
     }
 
     public void consume(BigDecimal amount, String requestedUnit, LocalDate onDate) {

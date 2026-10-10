@@ -4,25 +4,16 @@ import com.iotech.qualitrack.platform.batch.domain.model.commands.CreateBatchCom
 import com.iotech.qualitrack.platform.batch.interfaces.rest.resources.CreateBatchResource;
 
 /**
- * Assembler to convert a CreateBatchResource to a CreateBatchCommand.
+ * Builds the batch registration command from the path hierarchy and the request body.
  */
-public class CreateBatchCommandFromResourceAssembler {
+public final class CreateBatchCommandFromResourceAssembler {
 
-    /**
-     * Converts a CreateBatchResource to a CreateBatchCommand.
-     *
-     * @param resource The {@link CreateBatchResource} resource to convert.
-     * @return The {@link CreateBatchCommand} command that results from the conversion.
-     */
-    public static CreateBatchCommand toCommandFromResource(CreateBatchResource resource) {
-        return new CreateBatchCommand(
-                resource.labId(),
-                resource.productId(),
-                resource.batchNumber(),
-                resource.quantity(),
-                resource.startDate(),
-                resource.notes(),
-                resource.unit()
-        );
+    private CreateBatchCommandFromResourceAssembler() {
+    }
+
+    public static CreateBatchCommand toCommandFromResource(Long laboratoryId, Long environmentId, Long productId,
+                                                           CreateBatchResource resource) {
+        return new CreateBatchCommand(laboratoryId, environmentId, productId, resource.batchNumber(), resource.quantity(),
+                resource.unit(), resource.startDate(), resource.notes());
     }
 }

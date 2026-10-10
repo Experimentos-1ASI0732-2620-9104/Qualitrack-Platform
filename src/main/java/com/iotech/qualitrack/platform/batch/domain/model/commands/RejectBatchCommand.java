@@ -1,30 +1,28 @@
 package com.iotech.qualitrack.platform.batch.domain.model.commands;
 
 /**
- * Command to request the rejection of a production batch.
+ * Command to reject a product batch with a reason (US82, TS72).
  *
- * @param batchId The numeric identifier of the batch. Cannot be null or less than 1.
- * @param rejectionDate The date the batch was rejected. Cannot be null or blank.
- * @param reason The justification for rejecting the batch. Cannot be null or blank.
+ * @param laboratoryId the laboratory identifier
+ * @param environmentId the environment identifier
+ * @param productId the product identifier
+ * @param batchId the batch to reject
+ * @param rejectionDate the rejection date in ISO 8601 format (yyyy-MM-dd)
+ * @param reason the justification (maximum 500 characters)
  */
 public record RejectBatchCommand(
+        Long laboratoryId,
+        Long environmentId,
+        Long productId,
         Long batchId,
         String rejectionDate,
         String reason
 ) {
-    /**
-     * Compact constructor for RejectBatchCommand.
-     * Enforces Fail-Fast validation.
-     */
     public RejectBatchCommand {
-        if (batchId == null || batchId <= 0) {
-            throw new IllegalArgumentException("batchId cannot be null or less than 1");
-        }
-        if (rejectionDate == null || rejectionDate.isBlank()) {
-            throw new IllegalArgumentException("rejectionDate cannot be null or blank");
-        }
-        if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("reason cannot be null or blank");
-        }
+        if (batchId == null || batchId <= 0) throw new IllegalArgumentException("batchId cannot be null or less than 1");
+        rejectionDate = CreateBatchCommand.isoDate(rejectionDate, "rejectionDate");
+        if (reason == null || reason.isBlank()) throw new IllegalArgumentException("reason cannot be null or blank");
+        reason = reason.trim();
+        if (reason.length() > 500) throw new IllegalArgumentException("reason cannot exceed 500 characters");
     }
 }

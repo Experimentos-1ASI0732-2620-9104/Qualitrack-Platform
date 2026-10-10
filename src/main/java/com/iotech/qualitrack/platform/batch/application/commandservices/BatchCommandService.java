@@ -1,40 +1,49 @@
 package com.iotech.qualitrack.platform.batch.application.commandservices;
 
+import com.iotech.qualitrack.platform.batch.domain.model.commands.AssignBatchContainerCommand;
+import com.iotech.qualitrack.platform.batch.domain.model.valueobjects.BatchContainer;
+import com.iotech.qualitrack.platform.batch.domain.model.aggregates.Batch;
 import com.iotech.qualitrack.platform.batch.domain.model.commands.CreateBatchCommand;
-import com.iotech.qualitrack.platform.batch.domain.model.commands.ReleaseBatchCommand;
 import com.iotech.qualitrack.platform.batch.domain.model.commands.RejectBatchCommand;
+import com.iotech.qualitrack.platform.batch.domain.model.commands.ReleaseBatchCommand;
+import com.iotech.qualitrack.platform.batch.domain.model.valueobjects.BatchRejection;
+import com.iotech.qualitrack.platform.batch.domain.model.valueobjects.BatchRelease;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
 import com.iotech.qualitrack.platform.shared.application.result.Result;
 
 /**
- * Application service contract for commands over production batches.
+ * Application service for the lifecycle of product batches.
  */
 public interface BatchCommandService {
+    /**
+     * Registers a pending batch of a product (US73, TS63).
+     *
+     * @return the batch, NOT_FOUND when the product is not in the environment, CONFLICT when the
+     * batch number is already used in the laboratory
+     */
+    Result<Batch, ApplicationError> handle(CreateBatchCommand command);
 
     /**
-     * Handles the creation of a new production batch.
+     * Releases a batch and stores the signature of the current user (US81, TS71).
      *
-     * @param command command containing initial batch manufacturing data
-     * @return created batch identifier (domain ID) or an application error
-     * @see CreateBatchCommand
+     * @return the release, NOT_FOUND when the batch is not a batch of the product, CONFLICT when the
+     * batch is already released or rejected
      */
-    Result<Long, ApplicationError> handle(CreateBatchCommand command);
+    Result<BatchRelease, ApplicationError> handle(ReleaseBatchCommand command);
 
     /**
-     * Handles the release of an existing production batch after quality control validation.
+     * Rejects a batch and keeps the reason (US82, TS72).
      *
-     * @param command command containing release date and final notes
-     * @return released batch identifier (domain ID) or an application error
-     * @see ReleaseBatchCommand
+     * @return the rejection, NOT_FOUND when the batch is not a batch of the product, CONFLICT when the
+     * batch is already released or rejected
      */
-    Result<Long, ApplicationError> handle(ReleaseBatchCommand command);
+    Result<BatchRejection, ApplicationError> handle(RejectBatchCommand command);
 
     /**
-     * Handles the rejection of an existing production batch.
+     * Stores the batch in a monitored container of a product storage environment (US78, TS68).
      *
-     * @param command command containing rejection date and reason
-     * @return rejected batch identifier (domain ID) or an application error
-     * @see RejectBatchCommand
+     * @return the container of the batch, not found when the batch is not registered for the product, a validation
+     * error without container, or a conflict when the container cannot receive the batch
      */
-    Result<Long, ApplicationError> handle(RejectBatchCommand command);
+    Result<BatchContainer, ApplicationError> handle(AssignBatchContainerCommand command);
 }

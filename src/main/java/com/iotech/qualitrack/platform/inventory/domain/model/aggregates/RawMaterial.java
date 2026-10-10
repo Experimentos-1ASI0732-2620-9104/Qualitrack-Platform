@@ -10,29 +10,41 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 
-/** Catalog identity. Suppliers, expiration and quantities belong to individual receipts. */
+/**
+ * Catalog identity of a raw material kept in an environment of the laboratory.
+ * Suppliers, expiration and quantities belong to individual receipts.
+ * The environment is null only for materials registered before environments existed.
+ */
 @Getter
 public class RawMaterial extends AbstractDomainAggregateRoot<RawMaterial> {
     private final Long id;
     private final Long laboratoryId;
+    private final Long environmentId;
     private final String code;
     private final String name;
     private final String unit;
     private final BigDecimal minimumStock;
 
-    public RawMaterial(Long id, Long laboratoryId, String code, String name,
+    public RawMaterial(Long id, Long laboratoryId, Long environmentId, String code, String name,
                        String unit, BigDecimal minimumStock) {
         if (id != null && id <= 0) throw new IllegalArgumentException("Invalid material ID");
         if (laboratoryId == null || laboratoryId <= 0) throw new IllegalArgumentException("Invalid laboratory ID");
+        if (environmentId != null && environmentId <= 0) throw new IllegalArgumentException("Invalid environment ID");
         if (code == null || code.isBlank()) throw new IllegalArgumentException("Material code is required");
         if (name == null || name.isBlank()) throw new IllegalArgumentException("Material name is required");
         this.unit = StockUnit.normalize(unit);
         StockUnit.validateQuantity(minimumStock, this.unit, true);
         this.id = id;
         this.laboratoryId = laboratoryId;
+        this.environmentId = environmentId;
         this.code = code.trim();
         this.name = name.trim();
         this.minimumStock = minimumStock;
+    }
+
+    /** True when the material is kept in the given environment. */
+    public boolean belongsToEnvironment(Long environmentId) {
+        return this.environmentId != null && this.environmentId.equals(environmentId);
     }
 
     /** Calculates usable stock from distinct receipts; never stores a second stock counter. */

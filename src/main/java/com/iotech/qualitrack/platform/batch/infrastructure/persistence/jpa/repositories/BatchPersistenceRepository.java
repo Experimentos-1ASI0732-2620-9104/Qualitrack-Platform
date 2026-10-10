@@ -4,7 +4,6 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
-import com.iotech.qualitrack.platform.batch.domain.model.valueobjects.BatchStatus;
 import com.iotech.qualitrack.platform.batch.infrastructure.persistence.jpa.entities.BatchPersistenceEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -16,7 +15,7 @@ import java.util.Optional;
  * Spring Data JPA repository for {@link BatchPersistenceEntity}.
  *
  * <p>Handles database operations for the batches table using Long as the primary key.
- * Provides custom queries for fetching batches by laboratory, status, and batch number.</p>
+ * Provides custom queries for fetching batches by laboratory, product and batch number.</p>
  */
 @Repository
 public interface BatchPersistenceRepository extends JpaRepository<BatchPersistenceEntity, Long> {
@@ -31,20 +30,13 @@ public interface BatchPersistenceRepository extends JpaRepository<BatchPersisten
     List<BatchPersistenceEntity> findAllByLabId(Long labId);
 
     /**
-     * Finds all batches with a specific lifecycle status.
-     * @param status The batch lifecycle status.
+     * Finds the batches of a product, newest start date first.
+     * @param productId The numeric ID of the product.
      */
-    List<BatchPersistenceEntity> findAllByStatus(BatchStatus status);
+    List<BatchPersistenceEntity> findAllByProductIdOrderByStartDateDescIdDesc(Long productId);
 
     /**
-     * Finds a batch by its unique traceability code.
-     * @param batchNumber The unique batch number.
+     * Checks whether the laboratory already uses the batch number.
      */
-    Optional<BatchPersistenceEntity> findByBatchNumber(String batchNumber);
-
-    /**
-     * Checks if a batch with the given batch number already exists.
-     * Useful for Fail-Fast validation during batch creation.
-     */
-    boolean existsByBatchNumber(String batchNumber);
+    boolean existsByLabIdAndBatchNumber(Long labId, String batchNumber);
 }

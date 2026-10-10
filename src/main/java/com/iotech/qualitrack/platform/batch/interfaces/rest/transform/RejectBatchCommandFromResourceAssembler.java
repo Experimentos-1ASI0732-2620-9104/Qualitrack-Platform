@@ -1,25 +1,27 @@
 package com.iotech.qualitrack.platform.batch.interfaces.rest.transform;
 
 import com.iotech.qualitrack.platform.batch.domain.model.commands.RejectBatchCommand;
+import com.iotech.qualitrack.platform.batch.domain.model.valueobjects.BatchRejection;
+import com.iotech.qualitrack.platform.batch.interfaces.rest.resources.BatchRejectionResource;
 import com.iotech.qualitrack.platform.batch.interfaces.rest.resources.RejectBatchResource;
 
 /**
- * Assembler to convert a RejectBatchResource to a RejectBatchCommand.
+ * Maps batch rejections between REST and the domain.
  */
-public class RejectBatchCommandFromResourceAssembler {
+public final class RejectBatchCommandFromResourceAssembler {
 
-    /**
-     * Converts a RejectBatchResource to a RejectBatchCommand.
-     *
-     * @param batchId The batch numeric identifier from the route.
-     * @param resource The {@link RejectBatchResource} resource to convert.
-     * @return The {@link RejectBatchCommand} command that results from the conversion.
-     */
-    public static RejectBatchCommand toCommandFromResource(Long batchId, RejectBatchResource resource) {
-        return new RejectBatchCommand(
-                batchId,
-                resource.rejectionDate(),
-                resource.reason()
-        );
+    private RejectBatchCommandFromResourceAssembler() {
+    }
+
+    public static RejectBatchCommand toCommandFromResource(Long laboratoryId, Long environmentId, Long productId,
+                                                           Long batchId, RejectBatchResource resource) {
+        return new RejectBatchCommand(laboratoryId, environmentId, productId, batchId, resource.rejectionDate(), resource.reason());
+    }
+
+    public static BatchRejectionResource toResourceFromRejection(BatchRejection rejection) {
+        var batch = rejection.batch();
+        var record = rejection.record();
+        return new BatchRejectionResource(record.getId(), batch.getId(), batch.getBatchNumber(), batch.getStatus().name(),
+                record.getRejectionDate(), record.getReason());
     }
 }

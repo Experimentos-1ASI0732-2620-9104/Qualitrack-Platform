@@ -21,6 +21,8 @@ public interface RawMaterialUsageRepository {
 
     List<RawMaterialUsage> findAllByRawMaterialId(Long rawMaterialId);
 
+    Optional<RawMaterialUsage> findByBatchIdAndOperationId(Long batchId, String operationId);
+
     RawMaterialUsage save(RawMaterialUsage rawMaterialUsage);
 
     boolean existsById(Long id);

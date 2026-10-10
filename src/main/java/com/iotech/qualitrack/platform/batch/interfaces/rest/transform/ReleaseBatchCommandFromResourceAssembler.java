@@ -1,25 +1,27 @@
 package com.iotech.qualitrack.platform.batch.interfaces.rest.transform;
 
 import com.iotech.qualitrack.platform.batch.domain.model.commands.ReleaseBatchCommand;
+import com.iotech.qualitrack.platform.batch.domain.model.valueobjects.BatchRelease;
+import com.iotech.qualitrack.platform.batch.interfaces.rest.resources.BatchReleaseResource;
 import com.iotech.qualitrack.platform.batch.interfaces.rest.resources.ReleaseBatchResource;
 
 /**
- * Assembler to convert a ReleaseBatchResource to a ReleaseBatchCommand.
+ * Maps batch releases between REST and the domain.
  */
-public class ReleaseBatchCommandFromResourceAssembler {
+public final class ReleaseBatchCommandFromResourceAssembler {
 
-    /**
-     * Converts a ReleaseBatchResource to a ReleaseBatchCommand.
-     *
-     * @param batchId The batch numeric identifier from the route.
-     * @param resource The {@link ReleaseBatchResource} resource to convert.
-     * @return The {@link ReleaseBatchCommand} command that results from the conversion.
-     */
-    public static ReleaseBatchCommand toCommandFromResource(Long batchId, ReleaseBatchResource resource) {
-        return new ReleaseBatchCommand(
-                batchId,
-                resource.releaseDate(),
-                resource.notes()
-        );
+    private ReleaseBatchCommandFromResourceAssembler() {
+    }
+
+    public static ReleaseBatchCommand toCommandFromResource(Long laboratoryId, Long environmentId, Long productId,
+                                                            Long batchId, ReleaseBatchResource resource) {
+        return new ReleaseBatchCommand(laboratoryId, environmentId, productId, batchId, resource.releaseDate(), resource.notes());
+    }
+
+    public static BatchReleaseResource toResourceFromRelease(BatchRelease release) {
+        var batch = release.batch();
+        var signature = release.signature();
+        return new BatchReleaseResource(batch.getId(), batch.getBatchNumber(), batch.getStatus().name(), batch.getEndDate(),
+                batch.getNotes(), signature.getSignedByUserId(), signature.getSignatureHash(), signature.getSignedAt());
     }
 }
