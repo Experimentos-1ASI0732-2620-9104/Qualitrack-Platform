@@ -68,17 +68,17 @@ public class DeviationAlertRepositoryImpl implements DeviationAlertRepository {
     }
 
     @Override
-    public List<DeviationAlert> findAllByEquipmentIdAndStatus(Long equipmentId, AlertStatus status) {
-        return repository.findAllByEquipmentIdAndStatus(equipmentId, status).stream()
+    public List<DeviationAlert> findAllByLaboratoryIdAndEnvironmentId(Long laboratoryId, Long environmentId) {
+        return repository.findAllByLaboratoryIdAndEnvironmentIdOrderByIdDesc(laboratoryId, environmentId).stream()
                 .map(DeviationAlertPersistenceAssembler::toDomainFromPersistence)
                 .toList();
     }
 
     @Override
-    public List<DeviationAlert> findAllByBatchIdAndStatus(Long batchId, AlertStatus status) {
-        return repository.findAllByBatchIdAndStatus(batchId, status).stream()
-                .map(DeviationAlertPersistenceAssembler::toDomainFromPersistence)
-                .toList();
+    public Optional<DeviationAlert> findOpenByEquipmentIdAndParameterName(Long equipmentId, String parameterName) {
+        return repository.findFirstByEquipmentIdAndParameterNameAndStatusInOrderByIdDesc(equipmentId, parameterName,
+                        List.of(AlertStatus.UNRESOLVED, AlertStatus.ACKNOWLEDGED))
+                .map(DeviationAlertPersistenceAssembler::toDomainFromPersistence);
     }
 
     @Override
