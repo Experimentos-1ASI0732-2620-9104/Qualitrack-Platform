@@ -34,7 +34,9 @@ public abstract class IntegrationTestSupport {
 
     protected record Account(Long id, String token) {}
 
-    protected record ReadyAccount(Account account, long laboratoryId) {
+    protected record Staff(long staffId, long userId, String token, String fullName) {}
+
+    protected record ReadyAccount(Account account, long laboratoryId, long environmentId) {
         public String token() { return account.token(); }
         public Long userId() { return account.id(); }
     }
@@ -61,13 +63,57 @@ public abstract class IntegrationTestSupport {
                 "applicableRegulations":["BPM"]}
                 """.formatted(unique, ruc.incrementAndGet()));
         assertThat(laboratory.statusCode()).withFailMessage(laboratory.body()).isEqualTo(201);
-        return new ReadyAccount(account, id(laboratory));
+        long laboratoryId = id(laboratory);
+        var environment = call("POST", "/laboratories/" + laboratoryId + "/environments", account.token(),
+                "{\"code\":\"ENV-01\",\"name\":\"Integration environment\"}");
+        assertThat(environment.statusCode()).withFailMessage(environment.body()).isEqualTo(201);
+        return new ReadyAccount(account, laboratoryId, id(environment));
+    }
+
+    /** Registers a staff member the way a quality manager does and signs them in after the password change. */
+    protected Staff staff(ReadyAccount owner, String fullName, String accessRole) throws Exception {
+        var email = "staff-" + UUID.randomUUID() + "@qualitrack.test";
+        var created = call("POST", "/laboratories/" + owner.laboratoryId() + "/staff", owner.token(), """
+                {"fullName":"%s","role":"Production operator","email":"%s","accessRole":"%s"}
+                """.formatted(fullName, email, accessRole));
+        assertThat(created.statusCode()).withFailMessage(created.body()).isEqualTo(201);
+        String temporaryPassword = json(created, "$.credentials.temporaryPassword");
+        var session = signIn(email, temporaryPassword);
+        assertThat(session.statusCode()).withFailMessage(session.body()).isEqualTo(200);
+        String token = json(session, "$.token");
+        var changed = call("POST", "/users/me/password-changes", token, """
+                {"currentPassword":"%s","newPassword":"StaffPassword123"}
+                """.formatted(temporaryPassword));
+        assertThat(changed.statusCode()).withFailMessage(changed.body()).isEqualTo(204);
+        return new Staff(((Number) json(created, "$.staffMember.id")).longValue(),
+                ((Number) json(created, "$.staffMember.userId")).longValue(), token, fullName);
+    }
+
+    /** Registers equipment in the laboratory and, when asked, locates it in the environment. */
+    protected HttpResponse<String> registerEquipment(ReadyAccount actor, long laboratoryId, String name) throws Exception {
+        return call("POST", "/laboratories/" + laboratoryId + "/equipments", actor.token(), """
+                {"name":"%s","type":"Refrigerator","model":"R-200","serialNumber":"SN-%s"}
+                """.formatted(name, UUID.randomUUID()));
+    }
+
+    protected long locatedEquipment(ReadyAccount owner, String name) throws Exception {
+        var created = registerEquipment(owner, owner.laboratoryId(), name);
+        assertThat(created.statusCode()).withFailMessage(created.body()).isEqualTo(201);
+        long equipmentId = id(created);
+        var located = call("POST", environmentPath(owner) + "/equipments", owner.token(),
+                "{\"equipmentId\":" + equipmentId + "}");
+        assertThat(located.statusCode()).withFailMessage(located.body()).isEqualTo(201);
+        return equipmentId;
+    }
+
+    protected static String environmentPath(ReadyAccount owner) {
+        return "/laboratories/" + owner.laboratoryId() + "/environments/" + owner.environmentId();
     }
 
     protected HttpResponse<String> signUp(String username, String password) throws Exception {
         return call("POST", "/authentication/sign-up", null, """
-                {"username":"%s","password":"%s","roles":["ROLE_QA_MANAGER"],"laboratoryId":null}
-                """.formatted(username, password));
+                {"username":"%s","email":"%s@qualitrack.test","password":"%s","roles":["ROLE_QA_MANAGER"],"laboratoryId":null}
+                """.formatted(username, username, password));
     }
 
     protected HttpResponse<String> signIn(String username, String password) throws Exception {
