@@ -24,6 +24,11 @@ public interface TokenService {
     String getUsernameFromToken(String token);
 
     /**
+     * @return the account the token was issued to, or null when the token does not carry it
+     */
+    Long getUserIdFromToken(String token);
+
+    /**
      * Validates whether a token is structurally valid and not expired.
      *
      * @param token bearer token
