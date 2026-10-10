@@ -1,6 +1,13 @@
 package com.iotech.qualitrack.platform.batch.domain.model.entities;
 
+import com.iotech.qualitrack.platform.batch.domain.model.aggregates.Batch;
 import lombok.Getter;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.HexFormat;
 
 /**
  * The DigitalSignature domain entity.
@@ -87,5 +94,27 @@ public class DigitalSignature {
         this.signedByUserId = signedByUserId;
         this.signatureHash = signatureHash;
         this.signedAt = signedAt;
+    }
+
+    /**
+     * Signs the release of a batch on behalf of the user who confirmed it (US81).
+     *
+     * <p>The hash is the SHA-256 of the batch identity, its release date and the signer, so any later
+     * change of those values no longer matches the stored evidence.</p>
+     *
+     * @param batch the released batch
+     * @param signedByUserId the user who confirmed the release
+     * @param signedAt the moment of the signature
+     * @return the signature evidence to store
+     */
+    public static DigitalSignature sign(Batch batch, Long signedByUserId, Instant signedAt) {
+        var content = String.join("|", String.valueOf(batch.getId()), batch.getBatchNumber(), String.valueOf(batch.getLabId()),
+                String.valueOf(batch.getProductId()), batch.getEndDate(), String.valueOf(signedByUserId), signedAt.toString());
+        try {
+            var hash = MessageDigest.getInstance("SHA-256").digest(content.getBytes(StandardCharsets.UTF_8));
+            return new DigitalSignature(batch.getId(), signedByUserId, HexFormat.of().formatHex(hash), signedAt.toString());
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
     }
 }
