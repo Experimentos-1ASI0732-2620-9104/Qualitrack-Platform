@@ -6,7 +6,7 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.Subscription;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
-import com.stripe.param.SubscriptionCancelParams;
+import com.stripe.param.SubscriptionUpdateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -94,7 +94,8 @@ public class ExternalStripeService {
                     subscription.getId(),
                     toIsoDateTime(periodStart),
                     toIsoDateTime(periodEnd),
-                    subscription.getStatus()
+                    subscription.getStatus(),
+                    Boolean.TRUE.equals(subscription.getCancelAtPeriodEnd())
             );
 
         } catch (StripeException e) {
@@ -103,16 +104,16 @@ public class ExternalStripeService {
     }
 
     /**
-     * Cancels an active Stripe subscription.
+     * Cancels the renewal of a Stripe subscription: Stripe ends it when the current period ends (cancel_at_period_end).
      *
      * @param stripeSubscriptionId Stripe subscription identifier
      */
-    public void cancelSubscription(String stripeSubscriptionId) {
+    public void cancelRenewal(String stripeSubscriptionId) {
         try {
             var subscription = Subscription.retrieve(stripeSubscriptionId, requestOptions());
-            subscription.cancel(SubscriptionCancelParams.builder().build(), requestOptions());
+            subscription.update(SubscriptionUpdateParams.builder().setCancelAtPeriodEnd(true).build(), requestOptions());
         } catch (StripeException e) {
-            throw new IllegalStateException("Failed to cancel Stripe subscription: " + e.getMessage(), e);
+            throw new IllegalStateException("Failed to cancel the renewal of the Stripe subscription: " + e.getMessage(), e);
         }
     }
 
