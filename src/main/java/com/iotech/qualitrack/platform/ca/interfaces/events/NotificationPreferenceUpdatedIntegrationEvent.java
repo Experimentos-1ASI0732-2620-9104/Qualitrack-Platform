@@ -12,7 +12,6 @@ import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertSeverity
  * @param preferenceId the notification preference identifier
  * @param userId the owner user identifier
  * @param emailEnabled whether email notifications are enabled
- * @param smsEnabled whether SMS notifications are enabled
  * @param inAppEnabled whether in-app notifications are enabled
  * @param minimumSeverity the minimum severity required for notifications
  */
@@ -20,7 +19,6 @@ public record NotificationPreferenceUpdatedIntegrationEvent(
         Long preferenceId,
         Long userId,
         Boolean emailEnabled,
-        Boolean smsEnabled,
         Boolean inAppEnabled,
         AlertSeverity minimumSeverity
 ) {
@@ -37,7 +35,6 @@ public record NotificationPreferenceUpdatedIntegrationEvent(
                 event.preferenceId(),
                 event.userId(),
                 event.emailEnabled(),
-                event.smsEnabled(),
                 event.inAppEnabled(),
                 event.minimumSeverity()
         );
