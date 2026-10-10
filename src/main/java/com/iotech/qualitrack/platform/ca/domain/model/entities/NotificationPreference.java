@@ -31,11 +31,6 @@ public class NotificationPreference {
     private Boolean emailEnabled;
 
     /**
-     * Indicates whether SMS notifications are enabled.
-     */
-    private Boolean smsEnabled;
-
-    /**
      * Indicates whether in-app notifications are enabled.
      */
     private Boolean inAppEnabled;
@@ -59,7 +54,6 @@ public class NotificationPreference {
      * @param id The unique numeric ID.
      * @param userId The owner user ID.
      * @param emailEnabled Whether email notifications are enabled.
-     * @param smsEnabled Whether SMS notifications are enabled.
      * @param inAppEnabled Whether in-app notifications are enabled.
      * @param minimumSeverity The minimum severity threshold.
      */
@@ -67,14 +61,12 @@ public class NotificationPreference {
             Long id,
             Long userId,
             Boolean emailEnabled,
-            Boolean smsEnabled,
             Boolean inAppEnabled,
             AlertSeverity minimumSeverity
     ) {
         this.id = id;
         this.userId = userId;
         this.emailEnabled = emailEnabled;
-        this.smsEnabled = smsEnabled;
         this.inAppEnabled = inAppEnabled;
         this.minimumSeverity = minimumSeverity;
     }
@@ -91,7 +83,6 @@ public class NotificationPreference {
 
         this.userId = userId;
         this.emailEnabled = true;
-        this.smsEnabled = false;
         this.inAppEnabled = true;
         this.minimumSeverity = AlertSeverity.WARNING;
     }
@@ -105,8 +96,25 @@ public class NotificationPreference {
         Objects.requireNonNull(command, "Update notification preference command is required");
 
         this.emailEnabled = Objects.requireNonNull(command.emailEnabled(), "emailEnabled is required");
-        this.smsEnabled = Objects.requireNonNull(command.smsEnabled(), "smsEnabled is required");
         this.inAppEnabled = Objects.requireNonNull(command.inAppEnabled(), "inAppEnabled is required");
         this.minimumSeverity = Objects.requireNonNull(command.minimumSeverity(), "minimumSeverity is required");
+    }
+
+    /**
+     * Whether a notification reaches the bell of the user. The minimum severity applies to alerts; quality decisions
+     * on batches always reach it.
+     *
+     * @param alertSeverity severity of the alert, or null for a notification that is not about an alert
+     */
+    public boolean wantsInApp(AlertSeverity alertSeverity) {
+        return Boolean.TRUE.equals(inAppEnabled) && (alertSeverity == null || alertSeverity.isAtLeast(minimumSeverity));
+    }
+
+    /**
+     * Whether the user receives the e-mail notice of an alert. Only critical alerts are e-mailed (US84).
+     */
+    public boolean wantsEmail(AlertSeverity alertSeverity) {
+        return Boolean.TRUE.equals(emailEnabled) && alertSeverity == AlertSeverity.CRITICAL
+                && alertSeverity.isAtLeast(minimumSeverity);
     }
 }

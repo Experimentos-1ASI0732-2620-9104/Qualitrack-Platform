@@ -1,96 +1,64 @@
 package com.iotech.qualitrack.platform.ra.interfaces.rest;
 
-import com.iotech.qualitrack.platform.ra.application.commandservices.RaCommandService;
 import com.iotech.qualitrack.platform.ra.application.queryservices.RaQueryService;
-import com.iotech.qualitrack.platform.ra.domain.model.aggregates.KpiDashboard;
-import com.iotech.qualitrack.platform.ra.domain.model.commands.CalculateKpiDashboardCommand;
 import com.iotech.qualitrack.platform.ra.domain.model.queries.GetKpiDashboardByLaboratoryIdQuery;
 import com.iotech.qualitrack.platform.ra.interfaces.rest.resources.KpiDashboardResource;
 import com.iotech.qualitrack.platform.ra.interfaces.rest.transform.KpiDashboardResourceFromEntityAssembler;
+import com.iotech.qualitrack.platform.ra.interfaces.rest.transform.ReportingPeriodAssembler;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
-import com.iotech.qualitrack.platform.shared.application.result.Result;
+import com.iotech.qualitrack.platform.shared.interfaces.rest.resources.ErrorResource;
 import com.iotech.qualitrack.platform.shared.interfaces.rest.transform.ErrorResponseAssembler;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
- * REST controller that exposes laboratory KPI dashboard resources.
+ * Indicators of a laboratory calculated from persisted records (US93, TS81).
  */
 @RestController
-@RequestMapping(
-        value = "/api/v1/laboratories/{laboratoryId}/kpi-dashboards",
-        produces = APPLICATION_JSON_VALUE
-)
-@Tag(name = "Laboratories", description = "Laboratory KPI dashboard endpoints")
+@RequestMapping(value = "/api/v1/laboratories/{laboratoryId}/kpi-dashboards", produces = APPLICATION_JSON_VALUE)
 public class KpiDashboardController {
 
-    private final RaCommandService raCommandService;
     private final RaQueryService raQueryService;
 
-    public KpiDashboardController(
-            RaCommandService raCommandService,
-            RaQueryService raQueryService
-    ) {
-        this.raCommandService = raCommandService;
+    public KpiDashboardController(RaQueryService raQueryService) {
         this.raQueryService = raQueryService;
     }
 
-    /**
-     * Creates a KPI dashboard snapshot for a laboratory.
-     *
-     * @param laboratoryId laboratory numeric identifier
-     * @return the created KPI dashboard resource
-     */
-    @PostMapping
-    @Operation(summary = "Create laboratory KPI dashboard snapshot")
-    public ResponseEntity<?> createKpiDashboard(
-            @PathVariable Long laboratoryId
-    ) {
-        var result = raCommandService.handle(new CalculateKpiDashboardCommand(laboratoryId));
-
-        return toKpiDashboardResponse(result);
-    }
-
-    /**
-     * Retrieves KPI dashboard snapshots for a laboratory.
-     *
-     * @param laboratoryId laboratory numeric identifier
-     * @param limit maximum number of dashboard snapshots to return
-     * @return the KPI dashboard resource when found
-     */
     @GetMapping
-    @Operation(summary = "Get current laboratory operational metrics",
-            description = "Calculated from persisted records. Empty metrics mean no source data. Live results have no snapshot id; health score and targets are null when no assessment is configured.")
-    public ResponseEntity<KpiDashboardResource> getKpiDashboardByLaboratoryId(
+    @Operation(summary = "Get the indicators of the laboratory",
+            description = "Operational counts and the average, minimum and maximum of the readings of each device and "
+                    + "metric of the environments in the period (by default the last 7 days, at most 31 days). Calculated "
+                    + "from persisted records on request; a metric without readings has no summary.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Indicators of the laboratory",
+                    content = @Content(schema = @Schema(implementation = KpiDashboardResource.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid period",
+                    content = @Content(schema = @Schema(implementation = ErrorResource.class))),
+            @ApiResponse(responseCode = "403", description = "Laboratory not available to the account"),
+            @ApiResponse(responseCode = "404", description = "Environment not found in the laboratory",
+                    content = @Content(schema = @Schema(implementation = ErrorResource.class)))
+    })
+    public ResponseEntity<?> getKpiDashboardByLaboratoryId(
             @PathVariable Long laboratoryId,
-            @Parameter(description = "Maximum number of dashboard snapshots to return")
-            @RequestParam(defaultValue = "1") Integer limit
-    ) {
-        var dashboard = raQueryService.handle(new GetKpiDashboardByLaboratoryIdQuery(laboratoryId));
-
-        if (dashboard.isEmpty()) return ResponseEntity.notFound().build();
-
-        return ResponseEntity.ok(
-                KpiDashboardResourceFromEntityAssembler.toResourceFromEntity(dashboard.get())
-        );
-    }
-
-    private static ResponseEntity<?> toKpiDashboardResponse(
-            Result<KpiDashboard, ApplicationError> result
-    ) {
-        return switch (result) {
-            case Result.Success<KpiDashboard, ApplicationError> success ->
-                    ResponseEntity.status(201).body(
-                            KpiDashboardResourceFromEntityAssembler.toResourceFromEntity(success.value())
-                    );
-
-            case Result.Failure<KpiDashboard, ApplicationError> failure ->
-                    ErrorResponseAssembler.toErrorResponseFromApplicationError(failure.error());
-        };
+            @Parameter(description = "Start of the period (ISO-8601 with offset)") @RequestParam(required = false) String from,
+            @Parameter(description = "End of the period (ISO-8601 with offset)") @RequestParam(required = false) String to,
+            @Parameter(description = "Only this environment") @RequestParam(required = false) Long environmentId) {
+        var period = ReportingPeriodAssembler.toIndicatorPeriod(from, to);
+        return raQueryService.handle(new GetKpiDashboardByLaboratoryIdQuery(laboratoryId, environmentId, period))
+                .<ResponseEntity<?>>map(dashboard -> ResponseEntity.ok(KpiDashboardResourceFromEntityAssembler.toResourceFromEntity(dashboard)))
+                .orElseGet(() -> ErrorResponseAssembler.toErrorResponseFromApplicationError(
+                        ApplicationError.notFound("Environment", environmentId)));
     }
 }

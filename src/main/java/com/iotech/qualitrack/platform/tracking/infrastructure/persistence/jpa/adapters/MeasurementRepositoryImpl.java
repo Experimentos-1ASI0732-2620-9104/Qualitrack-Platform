@@ -6,17 +6,13 @@ import com.iotech.qualitrack.platform.tracking.infrastructure.persistence.jpa.as
 import com.iotech.qualitrack.platform.tracking.infrastructure.persistence.jpa.repositories.MeasurementPersistenceRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * JPA adapter implementation for the {@link MeasurementRepository} domain port.
- */
 @Repository
 public class MeasurementRepositoryImpl implements MeasurementRepository {
-
-    private static final int DEFAULT_LATEST_LIMIT = 50;
-
     private final MeasurementPersistenceRepository persistenceRepository;
 
     public MeasurementRepositoryImpl(MeasurementPersistenceRepository persistenceRepository) {
@@ -24,37 +20,44 @@ public class MeasurementRepositoryImpl implements MeasurementRepository {
     }
 
     @Override
-    public Optional<Measurement> findById(Long id) {
-        return persistenceRepository.findById(id)
-                .map(MeasurementPersistenceAssembler::toDomainFromPersistence);
-    }
-
-    @Override
-    public List<Measurement> findLatest() {
-        return persistenceRepository.findAllByOrderByTimestampDesc().stream()
-                .limit(DEFAULT_LATEST_LIMIT)
-                .map(MeasurementPersistenceAssembler::toDomainFromPersistence)
-                .toList();
-    }
-
-    @Override
-    public List<Measurement> findLatestByEquipmentId(Long equipmentId) {
-        return persistenceRepository.findAllByEquipmentIdOrderByTimestampDesc(equipmentId).stream()
-                .limit(DEFAULT_LATEST_LIMIT)
-                .map(MeasurementPersistenceAssembler::toDomainFromPersistence)
-                .toList();
-    }
-
-    @Override
     public Measurement save(Measurement measurement) {
-        var entity = MeasurementPersistenceAssembler.toPersistenceFromDomain(measurement);
-        var saved = persistenceRepository.save(entity);
-
+        var saved = persistenceRepository.save(MeasurementPersistenceAssembler.toPersistenceFromDomain(measurement));
         return MeasurementPersistenceAssembler.toDomainFromPersistence(saved);
     }
 
     @Override
-    public boolean existsById(Long id) {
-        return persistenceRepository.existsById(id);
+    public List<Measurement> findByDeviceAndPeriod(Long deviceId, String metric, Instant from, Instant to) {
+        var rows = metric == null
+                ? persistenceRepository.findAllByEquipmentIdAndMeasuredAtBetweenOrderByMeasuredAtAscIdAsc(deviceId, from, to)
+                : persistenceRepository.findAllByEquipmentIdAndParameterNameAndMeasuredAtBetweenOrderByMeasuredAtAscIdAsc(
+                        deviceId, metric, from, to);
+        return rows.stream().map(MeasurementPersistenceAssembler::toDomainFromPersistence).toList();
+    }
+
+    @Override
+    public Optional<Measurement> findByDeviceAndMetricAndMeasuredAt(Long deviceId, String metric, Instant measuredAt) {
+        return persistenceRepository.findFirstByEquipmentIdAndParameterNameAndMeasuredAt(deviceId, metric, measuredAt)
+                .map(MeasurementPersistenceAssembler::toDomainFromPersistence);
+    }
+
+    @Override
+    public Optional<Measurement> findPreviousReading(Long deviceId, String metric, Instant before) {
+        return persistenceRepository
+                .findFirstByEquipmentIdAndParameterNameAndMeasuredAtBeforeOrderByMeasuredAtDesc(deviceId, metric, before)
+                .map(MeasurementPersistenceAssembler::toDomainFromPersistence);
+    }
+
+    @Override
+    public List<Measurement> findByEnvironmentAndPeriod(Long laboratoryId, Long environmentId, Instant from, Instant to) {
+        return persistenceRepository
+                .findAllByLaboratoryIdAndEnvironmentIdAndMeasuredAtBetweenOrderByMeasuredAtAscIdAsc(laboratoryId, environmentId, from, to)
+                .stream()
+                .map(MeasurementPersistenceAssembler::toDomainFromPersistence)
+                .toList();
+    }
+
+    @Override
+    public Optional<Instant> findLastReceivedAt(Long deviceId) {
+        return Optional.ofNullable(persistenceRepository.findLastCreatedAtByEquipmentId(deviceId)).map(Date::toInstant);
     }
 }

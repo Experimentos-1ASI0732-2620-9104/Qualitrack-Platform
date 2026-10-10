@@ -1,49 +1,74 @@
 package com.iotech.qualitrack.platform.tracking.interfaces.acl;
 
-import com.iotech.qualitrack.platform.tracking.domain.model.entities.EquipmentTelemetryStatus;
-import com.iotech.qualitrack.platform.tracking.domain.model.entities.Measurement;
-import com.iotech.qualitrack.platform.tracking.domain.model.entities.TelemetryHistoryPoint;
-
+import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
 /**
- * Facade exposed by the Tracking bounded context for internal cross-context access.
- *
- * @remarks
- * Other bounded contexts should use this facade instead of depending directly
- * on Tracking repositories, application services, or REST controllers.
+ * Anti-corruption facade that exposes Tracking &amp; Telemetry records to other bounded contexts.
  */
 public interface TrackingContextFacade {
-    /**
-     * Retrieves latest telemetry measurements for an equipment.
-     *
-     * @param equipmentId the equipment identifier
-     * @return latest measurements for the equipment
-     */
-    List<Measurement> getLatestMeasurementsByEquipmentId(Long equipmentId);
 
     /**
-     * Retrieves the latest telemetry status for an equipment.
+     * Actions executed by a container monitor for a metric in a period, oldest first (US86).
      *
-     * @param equipmentId the equipment identifier
-     * @return latest telemetry status when found
+     * @param laboratoryId the laboratory that owns the device
+     * @param deviceId the container monitor
+     * @param metric the metric that triggered the actions
+     * @param from start of the period, inclusive
+     * @param to end of the period, inclusive
+     * @return the actions; empty when the device executed none
      */
-    Optional<EquipmentTelemetryStatus> getEquipmentStatusByEquipmentId(Long equipmentId);
+    List<ActuationReference> findActuations(Long laboratoryId, Long deviceId, String metric, Instant from, Instant to);
 
     /**
-     * Retrieves telemetry history points for an equipment.
+     * Actions executed by the container monitors of an environment in a period, oldest first (US95).
      *
-     * @param equipmentId the equipment identifier
-     * @return telemetry history points for the equipment
+     * @param laboratoryId the laboratory that owns the environment
+     * @param environmentId the environment
+     * @param from start of the period, inclusive
+     * @param to end of the period, inclusive
+     * @return the actions; empty when the devices executed none
      */
-    List<TelemetryHistoryPoint> getTelemetryHistoryByEquipmentId(Long equipmentId);
+    List<ActuationReference> findEnvironmentActuations(Long laboratoryId, Long environmentId, Instant from, Instant to);
 
     /**
-     * Determines whether an equipment has anomalous telemetry history points.
+     * Readings of the devices of an environment in a period, oldest first (US93-US95).
      *
-     * @param equipmentId the equipment identifier
-     * @return true when the equipment has telemetry anomalies
+     * @param laboratoryId the laboratory that owns the environment
+     * @param environmentId the environment
+     * @param from start of the period, inclusive
+     * @param to end of the period, inclusive
+     * @return the readings; empty when the devices sent none
      */
-    boolean hasAnomaliesByEquipmentId(Long equipmentId);
+    List<MeasurementReference> findMeasurements(Long laboratoryId, Long environmentId, Instant from, Instant to);
+
+    /**
+     * Action executed by a device, shared with other bounded contexts.
+     *
+     * @param id the actuation event
+     * @param deviceId the container monitor that executed it
+     * @param action the executed action
+     * @param triggerMetric the metric that triggered it, when reported
+     * @param triggerState the condition that triggered it, when reported
+     * @param result EXECUTED or FAILED
+     * @param occurredAt when the device executed it
+     */
+    record ActuationReference(Long id, Long deviceId, String action, String triggerMetric, String triggerState,
+                              String result, Instant occurredAt) {
+    }
+
+    /**
+     * Reading of a device, shared with other bounded contexts.
+     *
+     * @param id the measurement
+     * @param deviceId the environmental device or container monitor that sent it
+     * @param metric the measured metric
+     * @param value the numeric value, or null for readings without one (RFID tag)
+     * @param unit the unit of the value
+     * @param state NORMAL, WARNING or CRITICAL as evaluated by the platform, or null when it was not evaluated
+     * @param measuredAt when the device measured it
+     */
+    record MeasurementReference(Long id, Long deviceId, String metric, Double value, String unit, String state,
+                                Instant measuredAt) {
+    }
 }

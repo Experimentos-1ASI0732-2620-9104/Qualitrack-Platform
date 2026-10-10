@@ -8,40 +8,21 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 /**
- * Handles internal measurement recorded events and publishes Tracking integration events.
+ * Publishes recorded readings to the other bounded contexts.
  */
 @Service
 @Slf4j
 public class MeasurementRecordedEventHandler {
-
     private final ApplicationEventPublisher eventPublisher;
 
-    /**
-     * Creates the handler with the Spring application event publisher.
-     *
-     * @param eventPublisher Spring application event publisher
-     */
     public MeasurementRecordedEventHandler(ApplicationEventPublisher eventPublisher) {
         this.eventPublisher = eventPublisher;
     }
 
-    /**
-     * Handles a measurement recorded domain event.
-     *
-     * @param event the internal Tracking domain event
-     */
     @EventListener(MeasurementRecordedEvent.class)
     public void on(MeasurementRecordedEvent event) {
-        log.info(
-                "Telemetry measurement recorded: Measurement ID='{}', Equipment ID='{}', Parameter='{}', Value='{}', Unit='{}', Timestamp='{}'.",
-                event.measurementId(),
-                event.equipmentId(),
-                event.parameterName(),
-                event.value(),
-                event.unit(),
-                event.timestamp()
-        );
-
+        log.debug("Measurement recorded: id={}, device={}, metric={}, state={}", event.measurementId(),
+                event.deviceId(), event.metric(), event.state());
         eventPublisher.publishEvent(MeasurementRecordedIntegrationEvent.from(event));
     }
 }

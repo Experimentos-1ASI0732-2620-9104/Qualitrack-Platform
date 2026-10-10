@@ -9,7 +9,7 @@ import com.iotech.qualitrack.platform.ra.domain.model.queries.GetAuditReportById
 import com.iotech.qualitrack.platform.ra.domain.model.queries.GetAuditReportsByBatchIdQuery;
 import com.iotech.qualitrack.platform.ra.domain.model.queries.GetAuditReportsByEquipmentIdQuery;
 import com.iotech.qualitrack.platform.ra.domain.model.queries.GetAuditReportsByLaboratoryIdQuery;
-import com.iotech.qualitrack.platform.ra.domain.model.queries.GetDeviationTrendsByEquipmentIdQuery;
+import com.iotech.qualitrack.platform.ra.domain.model.queries.GetDeviationTrendsByEnvironmentQuery;
 import com.iotech.qualitrack.platform.ra.domain.model.queries.GetKpiDashboardByLaboratoryIdQuery;
 
 import java.util.List;
@@ -33,13 +33,13 @@ public interface RaQueryService {
     Optional<KpiDashboard> handle(GetKpiDashboardByLaboratoryIdQuery query);
 
     /**
-     * Handles retrieval of deviation trend analyses for an equipment.
+     * Handles the deviation indicators of the variables of an environment (US94, TS82).
      *
-     * @param query Query containing the equipment identifier.
-     * @return List of deviation trend analyses for the equipment.
-     * @see GetDeviationTrendsByEquipmentIdQuery
+     * @param query The environment and period.
+     * @return One trend per device and variable with readings, or empty when the environment is not in the laboratory.
+     * @see GetDeviationTrendsByEnvironmentQuery
      */
-    List<DeviationTrend> handle(GetDeviationTrendsByEquipmentIdQuery query);
+    Optional<List<DeviationTrend>> handle(GetDeviationTrendsByEnvironmentQuery query);
 
     /**
      * Handles retrieval of audit log entries using optional filters.
@@ -49,6 +49,14 @@ public interface RaQueryService {
      * @see GetAuditLogQuery
      */
     List<AuditLogEntry> handle(GetAuditLogQuery query);
+
+    /**
+     * Handles retrieval of the operations registered by a staff member, newest first.
+     *
+     * @return the audit entries performed with the staff member account, or empty when the staff member is not
+     * registered in the laboratory
+     */
+    Optional<List<AuditLogEntry>> handle(com.iotech.qualitrack.platform.ra.domain.model.queries.GetStaffActivityQuery query);
 
     /**
      * Handles retrieval of an audit report by its unique identifier.

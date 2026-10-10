@@ -4,9 +4,9 @@ import com.iotech.qualitrack.platform.batch.domain.model.aggregates.Batch;
 import com.iotech.qualitrack.platform.batch.domain.model.valueobjects.BatchStatus;
 import com.iotech.qualitrack.platform.batch.domain.repositories.BatchRepository;
 import com.iotech.qualitrack.platform.batch.domain.repositories.RawMaterialUsageRepository;
+import com.iotech.qualitrack.platform.batch.interfaces.acl.BatchContextFacade;
 import com.iotech.qualitrack.platform.laboratory.domain.repositories.LaboratoryRepository;
 import com.iotech.qualitrack.platform.ra.application.internal.outboundservices.BatchReportData;
-import com.iotech.qualitrack.platform.ra.application.internal.outboundservices.ComplianceReportData;
 import com.iotech.qualitrack.platform.ra.application.internal.outboundservices.EquipmentReportData;
 import com.iotech.qualitrack.platform.equipment.domain.repositories.MaintenanceRepository;
 import com.iotech.qualitrack.platform.ra.domain.model.entities.AuditLogEntry;
@@ -17,12 +17,8 @@ import com.iotech.qualitrack.platform.equipment.domain.model.aggregates.Equipmen
 import com.iotech.qualitrack.platform.equipment.domain.repositories.BpmParameterConfigRepository;
 import com.iotech.qualitrack.platform.equipment.domain.repositories.EquipmentRepository;
 import com.iotech.qualitrack.platform.ra.domain.model.aggregates.KpiDashboard;
-import com.iotech.qualitrack.platform.ra.domain.model.entities.DeviationTrend;
 import com.iotech.qualitrack.platform.ra.domain.model.entities.KpiMetric;
-import com.iotech.qualitrack.platform.ra.domain.model.entities.TrendDataPoint;
 import com.iotech.qualitrack.platform.ra.domain.model.valueobjects.KpiMetricStatus;
-import com.iotech.qualitrack.platform.tracking.domain.model.entities.Measurement;
-import com.iotech.qualitrack.platform.tracking.domain.repositories.MeasurementRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +26,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 /** Reads operational records without manufacturing observations or regulatory targets. */
 @Service
@@ -38,20 +35,18 @@ public class RaOperationalDataService {
     private final EquipmentRepository equipment;
     private final BatchRepository batches;
     private final DeviationAlertRepository alerts;
-    private final MeasurementRepository measurements;
     private final BpmParameterConfigRepository configurations;
     private final RawMaterialUsageRepository materialUsages;
     private final LaboratoryRepository laboratories;
     private final MaintenanceRepository maintenance;
 
     public RaOperationalDataService(EquipmentRepository equipment, BatchRepository batches,
-            DeviationAlertRepository alerts, MeasurementRepository measurements,
+            DeviationAlertRepository alerts,
             BpmParameterConfigRepository configurations, RawMaterialUsageRepository materialUsages,
             LaboratoryRepository laboratories, MaintenanceRepository maintenance) {
         this.equipment = equipment;
         this.batches = batches;
         this.alerts = alerts;
-        this.measurements = measurements;
         this.configurations = configurations;
         this.materialUsages = materialUsages;
         this.laboratories = laboratories;
@@ -59,11 +54,30 @@ public class RaOperationalDataService {
     }
 
     public BatchReportData batchReport(Batch batch, List<DeviationAlert> recordedAlerts,
-            boolean includeDeviations, String generatedBy, java.time.Instant generatedAt) {
+            boolean includeDeviations, Optional<BatchContextFacade.TraceabilityReference> traceability,
+            String generatedBy, java.time.Instant generatedAt) {
         var laboratory = laboratories.findById(batch.getLabId()).orElseThrow();
-        var materials = materialUsages.findAllByBatchId(batch.getId()).stream()
-                .map(item -> new BatchReportData.Material(item.getRawMaterialId(), item.getRawMaterialName(),
-                        item.getQuantityUsed(), item.getUnit(), item.getUsageDate())).toList();
+        var materials = traceability.map(trace -> trace.materials().stream()
+                        .map(item -> new BatchReportData.Material(item.rawMaterialId(), item.name(), item.lotId(),
+                                item.quantity(), item.unit(), item.usedOn(), quantity(item.stockBefore()),
+                                quantity(item.stockAfter()))).toList())
+                .orElseGet(() -> materialUsages.findAllByBatchId(batch.getId()).stream()
+                        .map(item -> new BatchReportData.Material(item.getRawMaterialId(), item.getRawMaterialName(),
+                                item.getInventoryReceiptId(), item.getQuantityUsed(), item.getUnit(), item.getUsageDate(),
+                                quantity(item.getStockBefore()), quantity(item.getStockAfter()))).toList());
+        var equipment = traceability.map(trace -> trace.equipment().stream()
+                .map(item -> new BatchReportData.Equipment(item.equipmentId(), item.name(), item.registeredAt())).toList())
+                .orElse(List.of());
+        var staff = traceability.map(trace -> trace.staff().stream()
+                .map(item -> new BatchReportData.Staff(item.staffId(), item.name(), item.role(), item.registeredAt())).toList())
+                .orElse(List.of());
+        var container = traceability.map(BatchContextFacade.TraceabilityReference::container)
+                .map(item -> new BatchReportData.Container(item.containerMonitorId(), item.name(), item.environmentId(),
+                        item.assignedAt() == null ? null : item.assignedAt().toString())).orElse(null);
+        var release = traceability.map(BatchContextFacade.TraceabilityReference::release)
+                .map(item -> new BatchReportData.Release(item.signedByUserId(), item.signatureHash(), item.signedAt())).orElse(null);
+        var rejection = traceability.map(BatchContextFacade.TraceabilityReference::rejection)
+                .map(item -> new BatchReportData.Rejection(item.rejectionDate(), item.reason())).orElse(null);
         var deviations = includeDeviations ? recordedAlerts.stream()
                 .map(item -> new BatchReportData.Deviation(item.getId(), item.getEquipmentId(), item.getParameterName(),
                         item.getRecordedValue(), item.getThresholdValue(), item.getUnit(), item.getTimestamp(),
@@ -71,18 +85,16 @@ public class RaOperationalDataService {
                 : List.<BatchReportData.Deviation>of();
         return new BatchReportData(laboratory.getName().name(), batch.getId(), batch.getBatchNumber(),
                 batch.getProductName(), batch.getQuantity(), batch.getUnit(), batch.getStatus().name(),
-                batch.getStartDate(), batch.getEndDate(), batch.getNotes(), materials, includeDeviations,
-                deviations, generatedBy, generatedAt);
+                batch.getStartDate(), batch.getEndDate(), batch.getNotes(), materials, equipment, staff, container,
+                release, rejection, includeDeviations, deviations, generatedBy, generatedAt);
     }
 
-    public ComplianceReportData complianceReport(Long laboratoryId, String from, String to,
-            List<DeviationAlert> recordedAlerts, String generatedBy, java.time.Instant generatedAt) {
-        var rows = recordedAlerts.stream().sorted(Comparator.comparing(DeviationAlert::getTimestamp))
-                .map(item -> new ComplianceReportData.Deviation(item.getId(), item.getEquipmentId(), item.getBatchId(),
-                        item.getParameterName(), item.getRecordedValue(), item.getThresholdValue(), item.getUnit(),
-                        item.getTimestamp(), item.getSeverity().name(), item.getStatus().name(), item.getResolutionNotes())).toList();
-        return new ComplianceReportData(laboratoryId, laboratories.findById(laboratoryId).orElseThrow().getName().name(),
-                from, to, rows, generatedBy, generatedAt);
+    private static String quantity(java.math.BigDecimal value) {
+        return value == null ? null : value.stripTrailingZeros().toPlainString();
+    }
+
+    public String laboratoryName(Long laboratoryId) {
+        return laboratories.findById(laboratoryId).orElseThrow().getName().name();
     }
 
     public EquipmentReportData equipmentReport(Equipment device, String from, String to,
@@ -134,27 +146,6 @@ public class RaOperationalDataService {
         return new KpiMetric(null, name, (double) value, "count", null, KpiMetricStatus.UNKNOWN, at);
     }
 
-    public List<DeviationTrend> trends(Long equipmentId) {
-        return configurations.findAllByEquipmentId(equipmentId).stream()
-                .map(config -> trend(equipmentId, config.getParameterName().name()))
-                .filter(trend -> !trend.getDataPoints().isEmpty()).toList();
-    }
-
-    public DeviationTrend trend(Long equipmentId, String parameter) {
-        var config = configurations.findAllByEquipmentId(equipmentId).stream()
-                .filter(item -> item.getParameterName().name().equalsIgnoreCase(parameter)).findFirst();
-        if (config.isEmpty()) return new DeviationTrend(parameter, equipmentId, List.of());
-        var limits = config.get();
-        var points = measurements.findLatestByEquipmentId(equipmentId).stream()
-                .filter(item -> item.getParameterName().equalsIgnoreCase(parameter))
-                .filter(item -> item.getUnit().equalsIgnoreCase(limits.getUnit()))
-                .filter(item -> item.getValue() != null && Double.isFinite(item.getValue()))
-                .sorted(Comparator.comparing(Measurement::getTimestamp))
-                .map(item -> new TrendDataPoint(item.getTimestamp(), item.getValue(),
-                        limits.getMaxValue(), limits.getMinValue())).toList();
-        return new DeviationTrend(parameter, equipmentId, points);
-    }
-
     public Batch batch(Long id) {
         return batches.findById(id).orElseThrow(() -> new IllegalArgumentException("Batch does not exist"));
     }
@@ -164,9 +155,4 @@ public class RaOperationalDataService {
     }
 
     public List<DeviationAlert> batchAlerts(Long id) { return alerts.findAllByBatchId(id); }
-
-    public List<DeviationAlert> laboratoryAlerts(Long id) {
-        return equipment.findAllByLabId(id).stream()
-                .flatMap(device -> alerts.findAllByEquipmentId(device.getId()).stream()).toList();
-    }
 }

@@ -4,7 +4,7 @@ import com.iotech.qualitrack.platform.tracking.domain.model.commands.RecordMeasu
 import com.iotech.qualitrack.platform.tracking.interfaces.rest.resources.RecordMeasurementResource;
 
 /**
- * Assembler that transforms measurement REST resources into application commands.
+ * Assembler that transforms a reading request into a command.
  */
 public final class RecordMeasurementCommandFromResourceAssembler {
 
@@ -12,22 +12,12 @@ public final class RecordMeasurementCommandFromResourceAssembler {
     }
 
     /**
-     * Converts a record measurement resource into a command.
-     *
-     * @param equipmentId the equipment numeric identifier from the route path
-     * @param resource the record measurement resource
-     * @return the record measurement command
+     * @param deviceId container monitor, or null for the environmental device of the environment
      */
-    public static RecordMeasurementCommand toCommandFromResource(
-            Long equipmentId,
-            RecordMeasurementResource resource
-    ) {
-        return new RecordMeasurementCommand(
-                equipmentId,
-                resource.parameterName(),
-                resource.value(),
-                resource.unit(),
-                resource.timestamp()
-        );
+    public static RecordMeasurementCommand toCommandFromResource(Long laboratoryId, Long environmentId, Long deviceId,
+                                                                 RecordMeasurementResource resource) {
+        return new RecordMeasurementCommand(laboratoryId, environmentId, deviceId,
+                TrackingRequestValues.metric(resource.metric()), resource.value(), resource.textValue(),
+                TrackingRequestValues.instant(resource.measuredAt(), "measuredAt"), resource.profileVersion());
     }
 }

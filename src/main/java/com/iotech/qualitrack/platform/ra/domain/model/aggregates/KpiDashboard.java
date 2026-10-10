@@ -2,6 +2,8 @@ package com.iotech.qualitrack.platform.ra.domain.model.aggregates;
 
 import com.iotech.qualitrack.platform.ra.domain.model.entities.KpiMetric;
 import com.iotech.qualitrack.platform.ra.domain.model.valueobjects.KpiMetricStatus;
+import com.iotech.qualitrack.platform.ra.domain.model.valueobjects.MeasurementSummary;
+import com.iotech.qualitrack.platform.ra.domain.model.valueobjects.ReportingPeriod;
 import com.iotech.qualitrack.platform.shared.domain.model.aggregates.AbstractDomainAggregateRoot;
 import lombok.Getter;
 
@@ -13,7 +15,8 @@ import java.util.Objects;
  * Aggregate root representing a KPI dashboard snapshot for a laboratory.
  *
  * <p>The KPI dashboard groups multiple calculated KPI metrics and provides an
- * overall health score used by the reporting and analytics views.</p>
+ * overall health score used by the reporting and analytics views. When it is calculated for a period it also
+ * summarizes the environmental readings of that period (US93, TS81).</p>
  */
 @Getter
 public class KpiDashboard extends AbstractDomainAggregateRoot<KpiDashboard> {
@@ -44,11 +47,37 @@ public class KpiDashboard extends AbstractDomainAggregateRoot<KpiDashboard> {
     private List<KpiMetric> metrics;
 
     /**
+     * Period of the measurement summaries, or null for a snapshot without one.
+     */
+    private ReportingPeriod period;
+
+    /**
+     * Average, minimum and maximum of the readings of each device and metric in the period.
+     */
+    private List<MeasurementSummary> measurementSummaries = List.of();
+
+    /**
      * Default constructor.
      * Required by the persistence and mapping layers to reconstruct the aggregate.
      */
     public KpiDashboard() {
         // Required for reconstruction by JPA or Assemblers
+    }
+
+    /**
+     * Calculated indicators of a laboratory for a period: operational counts and measurement summaries.
+     *
+     * @param laboratoryId The laboratory identifier.
+     * @param period The period of the measurement summaries.
+     * @param metrics The operational counts.
+     * @param measurementSummaries The summaries of the readings of the period.
+     * @param timestamp When the indicators were calculated.
+     */
+    public KpiDashboard(Long laboratoryId, ReportingPeriod period, List<KpiMetric> metrics,
+                        List<MeasurementSummary> measurementSummaries, String timestamp) {
+        this(null, laboratoryId, timestamp, null, metrics);
+        this.period = Objects.requireNonNull(period, "period cannot be null");
+        this.measurementSummaries = List.copyOf(measurementSummaries);
     }
 
     /**

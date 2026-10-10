@@ -2,56 +2,71 @@ package com.iotech.qualitrack.platform.ca.domain.model.commands;
 
 import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertSeverity;
 
+import java.time.Instant;
+
 /**
- * Command to request the creation of a new deviation alert.
+ * Command to register a deviation of an environment or of one of its monitored containers (TS73).
  *
- * @param equipmentId The numeric identifier of the equipment that generated the alert. Cannot be null or less than 1.
- * @param batchId The numeric identifier of the production batch associated with the alert, if applicable.
- * @param parameterName The name of the monitored parameter. Cannot be null or blank.
- * @param recordedValue The measured value that triggered the deviation. Cannot be null.
- * @param thresholdValue The configured threshold value that was exceeded. Cannot be null.
- * @param unit The measurement unit. Cannot be null or blank.
- * @param timestamp The timestamp when the deviation occurred. Cannot be null or blank.
- * @param severity The impact level of the alert. Cannot be null.
+ * <p>The deviation opens a new alert, or is correlated with the open alert of the same device and parameter when the
+ * incident continues.</p>
+ *
+ * @param laboratoryId   the laboratory of the environment
+ * @param environmentId  the environment where the deviation was detected
+ * @param deviceId       the environmental device or container monitor that detected it; null means the environmental
+ *                       device of the environment
+ * @param measurementId  the Tracking measurement that showed the deviation, when it comes from a reading
+ * @param parameterName  the monitored variable (for example TEMPERATURE or AIR_QUALITY)
+ * @param recordedValue  the measured value
+ * @param thresholdValue the limit crossed by the value
+ * @param unit           the unit of the value and the limit
+ * @param severity       the severity of the deviation
+ * @param detectedAt     when the deviation was measured
  */
 public record CreateDeviationAlertCommand(
-        Long equipmentId,
-        Long batchId,
+        Long laboratoryId,
+        Long environmentId,
+        Long deviceId,
+        Long measurementId,
         String parameterName,
         Double recordedValue,
         Double thresholdValue,
         String unit,
-        String timestamp,
-        AlertSeverity severity
+        AlertSeverity severity,
+        Instant detectedAt
 ) {
     /**
      * Compact constructor for CreateDeviationAlertCommand.
      * Enforces Fail-Fast validation.
      */
     public CreateDeviationAlertCommand {
-        if (equipmentId == null || equipmentId <= 0) {
-            throw new IllegalArgumentException("equipmentId cannot be null or less than 1");
+        if (laboratoryId == null || laboratoryId <= 0) {
+            throw new IllegalArgumentException("laboratoryId cannot be null or less than 1");
         }
-        if (batchId != null && batchId <= 0) {
-            throw new IllegalArgumentException("batchId cannot be less than 1");
+        if (environmentId == null || environmentId <= 0) {
+            throw new IllegalArgumentException("environmentId cannot be null or less than 1");
+        }
+        if (deviceId != null && deviceId <= 0) {
+            throw new IllegalArgumentException("deviceId cannot be less than 1");
         }
         if (parameterName == null || parameterName.isBlank()) {
             throw new IllegalArgumentException("parameterName cannot be null or blank");
         }
-        if (recordedValue == null) {
-            throw new IllegalArgumentException("recordedValue cannot be null");
+        if (recordedValue == null || !Double.isFinite(recordedValue)) {
+            throw new IllegalArgumentException("recordedValue must be a number");
         }
-        if (thresholdValue == null) {
-            throw new IllegalArgumentException("thresholdValue cannot be null");
+        if (thresholdValue == null || !Double.isFinite(thresholdValue)) {
+            throw new IllegalArgumentException("thresholdValue must be a number");
         }
         if (unit == null || unit.isBlank()) {
             throw new IllegalArgumentException("unit cannot be null or blank");
         }
-        if (timestamp == null || timestamp.isBlank()) {
-            throw new IllegalArgumentException("timestamp cannot be null or blank");
-        }
         if (severity == null) {
             throw new IllegalArgumentException("severity cannot be null");
         }
+        if (detectedAt == null) {
+            throw new IllegalArgumentException("detectedAt cannot be null");
+        }
+        parameterName = parameterName.trim().toUpperCase();
+        unit = unit.trim();
     }
 }

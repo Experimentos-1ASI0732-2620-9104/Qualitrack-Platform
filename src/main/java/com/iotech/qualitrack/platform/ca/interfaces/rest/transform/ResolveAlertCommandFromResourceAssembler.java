@@ -8,11 +8,17 @@ import com.iotech.qualitrack.platform.ca.interfaces.rest.resources.ResolveAlertR
  */
 public class ResolveAlertCommandFromResourceAssembler {
 
-    public static ResolveAlertCommand toCommandFromResource(Long alertId, ResolveAlertResource resource) {
+    /**
+     * @param alertId    alert being resolved
+     * @param resolvedBy authenticated user resolving it
+     * @param resource   resolution notes
+     * @throws IllegalArgumentException when the notes are missing (400)
+     */
+    public static ResolveAlertCommand toCommandFromResource(Long alertId, Long resolvedBy, ResolveAlertResource resource) {
         return new ResolveAlertCommand(
                 alertId,
-                resource.resolvedBy(),
-                resource.resolutionNotes()
+                resolvedBy,
+                resource == null ? null : resource.resolutionNotes()
         );
     }
 }

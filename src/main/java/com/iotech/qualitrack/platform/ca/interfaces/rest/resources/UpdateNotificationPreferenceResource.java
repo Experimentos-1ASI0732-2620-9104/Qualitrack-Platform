@@ -6,14 +6,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(
         name = "UpdateNotificationPreferenceRequest",
         description = "Request payload for updating notification preferences",
-        example = "{\"emailEnabled\": true, \"smsEnabled\": false, \"inAppEnabled\": true, \"minimumSeverity\": \"WARNING\"}"
+        example = "{\"emailEnabled\": true, \"inAppEnabled\": true, \"minimumSeverity\": \"WARNING\"}"
 )
 public record UpdateNotificationPreferenceResource(
         @Schema(description = "Whether email notifications are enabled", example = "true")
         Boolean emailEnabled,
-
-        @Schema(description = "Whether SMS notifications are enabled", example = "false")
-        Boolean smsEnabled,
 
         @Schema(description = "Whether in-app notifications are enabled", example = "true")
         Boolean inAppEnabled,
@@ -24,9 +21,6 @@ public record UpdateNotificationPreferenceResource(
     public UpdateNotificationPreferenceResource {
         if (emailEnabled == null) {
             throw new IllegalArgumentException("emailEnabled cannot be null");
-        }
-        if (smsEnabled == null) {
-            throw new IllegalArgumentException("smsEnabled cannot be null");
         }
         if (inAppEnabled == null) {
             throw new IllegalArgumentException("inAppEnabled cannot be null");

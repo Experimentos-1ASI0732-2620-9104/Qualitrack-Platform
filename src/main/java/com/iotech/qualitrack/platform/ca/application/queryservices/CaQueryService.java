@@ -4,9 +4,11 @@ import com.iotech.qualitrack.platform.ca.domain.model.aggregates.DeviationAlert;
 import com.iotech.qualitrack.platform.ca.domain.model.entities.ComplianceEvent;
 import com.iotech.qualitrack.platform.ca.domain.model.entities.NotificationPreference;
 import com.iotech.qualitrack.platform.ca.domain.model.queries.GetAlertByIdQuery;
+import com.iotech.qualitrack.platform.ca.domain.model.queries.GetAlertDetailQuery;
 import com.iotech.qualitrack.platform.ca.domain.model.queries.GetAlertsQuery;
 import com.iotech.qualitrack.platform.ca.domain.model.queries.GetComplianceEventsByRelatedEntityIdQuery;
 import com.iotech.qualitrack.platform.ca.domain.model.queries.GetNotificationPreferenceByUserIdQuery;
+import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.DeviationAlertDetail;
 
 import java.util.List;
 import java.util.Optional;
@@ -17,10 +19,10 @@ import java.util.Optional;
 public interface CaQueryService {
 
     /**
-     * Handles retrieval of deviation alerts using optional filters.
+     * Handles retrieval of the alerts of an environment using optional filters (US85, TS74).
      *
      * @param query alert filter query
-     * @return list of deviation alerts matching the provided filters
+     * @return alerts of the environment matching the provided filters, newest first
      * @see GetAlertsQuery
      */
     List<DeviationAlert> handle(GetAlertsQuery query);
@@ -33,6 +35,14 @@ public interface CaQueryService {
      * @see GetAlertByIdQuery
      */
     Optional<DeviationAlert> handle(GetAlertByIdQuery query);
+
+    /**
+     * Handles retrieval of an alert with the actions its container monitor executed during the incident (US86).
+     *
+     * @param query alert detail query
+     * @return the alert detail, or empty when the alert does not exist
+     */
+    Optional<DeviationAlertDetail> handle(GetAlertDetailQuery query);
 
     /**
      * Handles retrieval of compliance events related to a specific entity.
