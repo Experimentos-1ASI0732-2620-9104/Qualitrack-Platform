@@ -47,6 +47,13 @@ public class UserRepositoryImpl implements UserRepository {
     }
 
     @Override
+    public List<User> findByLaboratoryId(Long laboratoryId) {
+        return userPersistenceRepository.findByLaboratoryId(laboratoryId).stream()
+                .map(UserPersistenceAssembler::toDomainFromPersistence)
+                .toList();
+    }
+
+    @Override
     public User save(User user) {
         var entity = UserPersistenceAssembler.toPersistenceFromDomain(user);
         var savedEntity = userPersistenceRepository.save(entity);
@@ -62,5 +69,15 @@ public class UserRepositoryImpl implements UserRepository {
     @Override
     public boolean existsByUsername(String username) {
         return userPersistenceRepository.existsByUsername(username);
+    }
+
+    @Override
+    public Optional<User> findByEmail(String email) {
+        return userPersistenceRepository.findByEmail(email).map(UserPersistenceAssembler::toDomainFromPersistence);
+    }
+
+    @Override
+    public boolean existsByEmail(String email) {
+        return userPersistenceRepository.existsByEmail(email);
     }
 }

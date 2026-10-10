@@ -16,6 +16,7 @@ public record AuthenticatedUserResource(
         String username,
         String token,
         List<String> roles,
-        Long laboratoryId
+        Long laboratoryId,
+        boolean passwordChangeRequired
 ) {
 }
