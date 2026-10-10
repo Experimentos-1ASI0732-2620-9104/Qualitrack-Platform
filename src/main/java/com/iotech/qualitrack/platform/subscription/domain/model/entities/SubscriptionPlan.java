@@ -63,6 +63,28 @@ public class SubscriptionPlan {
     }
 
     /**
+     * Creates a new active plan offered to laboratories.
+     *
+     * @param stripePriceId the Stripe price charged at checkout; blank when the Stripe account has none yet
+     * @param maxEquipment null for an unlimited equipment allowance
+     * @return a plan that is not stored yet
+     */
+    public static SubscriptionPlan offer(
+            PlanCode code,
+            String name,
+            String description,
+            Money price,
+            BillingCycle billingCycle,
+            String stripePriceId,
+            Integer maxUsers,
+            Integer maxEquipment
+    ) {
+        var priceId = stripePriceId == null || stripePriceId.isBlank() ? null : stripePriceId.trim();
+        return new SubscriptionPlan(null, code, name, description, price, billingCycle, priceId,
+                maxUsers, maxEquipment, true);
+    }
+
+    /**
      * Indicates whether this plan can be selected by users.
      *
      * @return true if the plan is active
