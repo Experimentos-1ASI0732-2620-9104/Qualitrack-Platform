@@ -1,29 +1,59 @@
 package com.iotech.qualitrack.platform.equipment.application.commandservices;
 
+import com.iotech.qualitrack.platform.equipment.domain.model.aggregates.Equipment;
+import com.iotech.qualitrack.platform.equipment.domain.model.commands.AssignEquipmentToEnvironmentCommand;
+import com.iotech.qualitrack.platform.equipment.domain.model.commands.ChangeEquipmentStatusCommand;
 import com.iotech.qualitrack.platform.equipment.domain.model.commands.LinkSensorCommand;
 import com.iotech.qualitrack.platform.equipment.domain.model.commands.RegisterEquipmentCommand;
+import com.iotech.qualitrack.platform.equipment.domain.model.commands.RegisterIotDeviceCommand;
+import com.iotech.qualitrack.platform.equipment.domain.model.entities.EquipmentStatusChange;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
 import com.iotech.qualitrack.platform.shared.application.result.Result;
 
 /**
- * Application service contract for commands over equipment records.
+ * Application service contract for the commands of the Equipment aggregate.
  */
 public interface EquipmentCommandService {
 
     /**
-     * Handles the registration of a new equipment in a laboratory.
+     * Registers an equipment in a laboratory (US45).
      *
-     * @param command command containing initial equipment data
-     * @return created equipment identifier (domain ID) or an application error
+     * @return the registered equipment, NOT_FOUND for an unknown laboratory or CONFLICT for a repeated serial number
      * @see RegisterEquipmentCommand
      */
-    Result<Long, ApplicationError> handle(RegisterEquipmentCommand command);
+    Result<Equipment, ApplicationError> handle(RegisterEquipmentCommand command);
 
     /**
-     * Handles the linking of an external IoT sensor to an existing equipment.
+     * Registers an environmental device or container monitor (US51, US53).
      *
-     * @param command command containing the equipment ID and external sensor ID
-     * @return the equipment identifier (domain ID) upon successful linking or an application error
+     * @return the registered device, or CONFLICT when its identity or serial number already exists
+     * @see RegisterIotDeviceCommand
+     */
+    Result<Equipment, ApplicationError> handle(RegisterIotDeviceCommand command);
+
+    /**
+     * Locates an equipment or IoT device in an environment of its laboratory (US47, US52, US54).
+     *
+     * @return the located equipment, NOT_FOUND when the equipment or environment is not in the laboratory,
+     * or CONFLICT when the environment already has an environmental device
+     * @see AssignEquipmentToEnvironmentCommand
+     */
+    Result<Equipment, ApplicationError> handle(AssignEquipmentToEnvironmentCommand command);
+
+    /**
+     * Registers a change in the operational status of an equipment located in the environment (US48).
+     *
+     * @return the status change, NOT_FOUND when the equipment is not in the environment, or VALIDATION_ERROR
+     * when the requested status is the current one
+     * @see ChangeEquipmentStatusCommand
+     */
+    Result<EquipmentStatusChange, ApplicationError> handle(ChangeEquipmentStatusCommand command);
+
+    /**
+     * Handles the command to link an external IoT sensor to an existing equipment.
+     *
+     * @param command The command containing the equipment ID and the sensor's external ID.
+     * @return A Result containing the ID of the updated equipment, or an ApplicationError.
      * @see LinkSensorCommand
      */
     Result<Long, ApplicationError> handle(LinkSensorCommand command);
