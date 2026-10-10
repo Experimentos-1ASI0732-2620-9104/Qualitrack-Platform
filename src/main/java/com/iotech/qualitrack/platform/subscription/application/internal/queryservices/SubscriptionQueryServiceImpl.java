@@ -8,6 +8,7 @@ import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetActiv
 import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetActiveSubscriptionByUserIdQuery;
 import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetBillingSummaryByLaboratoryIdQuery;
 import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetPaymentsBySubscriptionIdQuery;
+import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetSubscriptionByIdQuery;
 import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetSubscriptionByStripeCheckoutSessionIdQuery;
 import com.iotech.qualitrack.platform.subscription.domain.model.queries.GetSubscriptionPlansQuery;
 import com.iotech.qualitrack.platform.subscription.domain.repositories.SubscriptionPaymentRepository;
@@ -66,5 +67,10 @@ public class SubscriptionQueryServiceImpl implements SubscriptionQueryService {
     @Override
     public Optional<Subscription> handle(GetSubscriptionByStripeCheckoutSessionIdQuery query) {
         return subscriptionRepository.findByStripeCheckoutSessionId(query.stripeCheckoutSessionId());
+    }
+
+    @Override
+    public Optional<Subscription> handle(GetSubscriptionByIdQuery query) {
+        return subscriptionRepository.findById(query.subscriptionId());
     }
 }

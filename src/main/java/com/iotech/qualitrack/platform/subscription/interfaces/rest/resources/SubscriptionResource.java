@@ -16,6 +16,7 @@ public record SubscriptionResource(
         String currentPeriodStart,
         String currentPeriodEnd,
         String cancelledAt,
-        Long cancelledBy
+        Long cancelledBy,
+        boolean cancelAtPeriodEnd
 ) {
 }

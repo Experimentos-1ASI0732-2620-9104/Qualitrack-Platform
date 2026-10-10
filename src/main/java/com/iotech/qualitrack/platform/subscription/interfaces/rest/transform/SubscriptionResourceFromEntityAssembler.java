@@ -22,7 +22,8 @@ public class SubscriptionResourceFromEntityAssembler {
                 entity.getCurrentPeriodStart(),
                 entity.getCurrentPeriodEnd(),
                 entity.getCancelledAt(),
-                entity.getCancelledBy()
+                entity.getCancelledBy(),
+                entity.isCancelAtPeriodEnd()
         );
     }
 }

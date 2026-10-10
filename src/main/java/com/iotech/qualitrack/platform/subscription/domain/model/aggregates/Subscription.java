@@ -29,8 +29,11 @@ public class Subscription extends AbstractDomainAggregateRoot<Subscription> {
     private String stripeCheckoutSessionId;
     private String currentPeriodStart;
     private String currentPeriodEnd;
+    /** When the renewal was cancelled; the subscription keeps its access until {@link #currentPeriodEnd}. */
     private String cancelledAt;
     private Long cancelledBy;
+    /** True when the subscription ends with the current period instead of renewing (US23). */
+    private boolean cancelAtPeriodEnd;
 
     /**
      * Default constructor.
@@ -55,7 +58,8 @@ public class Subscription extends AbstractDomainAggregateRoot<Subscription> {
             String currentPeriodStart,
             String currentPeriodEnd,
             String cancelledAt,
-            Long cancelledBy
+            Long cancelledBy,
+            boolean cancelAtPeriodEnd
     ) {
         this.id = id;
         this.userId = Objects.requireNonNull(userId, "User id is required");
@@ -73,6 +77,7 @@ public class Subscription extends AbstractDomainAggregateRoot<Subscription> {
         this.currentPeriodEnd = currentPeriodEnd;
         this.cancelledAt = cancelledAt;
         this.cancelledBy = cancelledBy;
+        this.cancelAtPeriodEnd = cancelAtPeriodEnd;
     }
 
     /**
@@ -95,19 +100,25 @@ public class Subscription extends AbstractDomainAggregateRoot<Subscription> {
                 command.currentPeriodStart(),
                 command.currentPeriodEnd(),
                 null,
-                null
+                null,
+                false
         );
     }
 
     /**
-     * Cancels the subscription.
+     * Cancels the renewal: the subscription stays active, and keeps its access, until the end of the paid period, when
+     * the payment provider ends it (US23).
      *
-     * @param cancelledBy The user requesting cancellation.
+     * @param cancelledBy The user requesting the cancellation.
      * @param cancelledAt The cancellation timestamp.
+     * @throws IllegalStateException when the subscription is not active or its renewal is already cancelled
      */
-    public void cancel(Long cancelledBy, String cancelledAt) {
+    public void cancelRenewal(Long cancelledBy, String cancelledAt) {
         if (!SubscriptionStatus.ACTIVE.equals(this.status)) {
-            throw new IllegalStateException("Only active subscriptions can be cancelled");
+            throw new IllegalStateException("Only the renewal of an active subscription can be cancelled");
+        }
+        if (cancelAtPeriodEnd) {
+            throw new IllegalStateException("The renewal of the subscription is already cancelled");
         }
         if (cancelledBy == null || cancelledBy <= 0) {
             throw new IllegalArgumentException("Cancelled by must be a positive user id");
@@ -116,7 +127,7 @@ public class Subscription extends AbstractDomainAggregateRoot<Subscription> {
             throw new IllegalArgumentException("Cancelled at is required");
         }
 
-        this.status = SubscriptionStatus.CANCELLED;
+        this.cancelAtPeriodEnd = true;
         this.cancelledBy = cancelledBy;
         this.cancelledAt = cancelledAt;
     }
@@ -156,9 +167,23 @@ public class Subscription extends AbstractDomainAggregateRoot<Subscription> {
 
     public void synchronizeStatus(SubscriptionStatus status) {
         this.status = Objects.requireNonNull(status);
-        if (status == SubscriptionStatus.ACTIVE) {
+    }
+
+    /**
+     * Applies the renewal decision recorded by the payment provider: a renewal resumed there clears the cancellation, and
+     * a cancellation made there (without a user of the platform) is kept.
+     *
+     * @param cancelAtPeriodEnd whether the provider ends the subscription with the current period
+     * @param at moment of the synchronization, used when the cancellation was made at the provider
+     */
+    public void synchronizeRenewal(boolean cancelAtPeriodEnd, String at) {
+        if (!cancelAtPeriodEnd && status == SubscriptionStatus.ACTIVE) {
+            this.cancelAtPeriodEnd = false;
             this.cancelledAt = null;
             this.cancelledBy = null;
+        } else if (cancelAtPeriodEnd && !this.cancelAtPeriodEnd) {
+            this.cancelAtPeriodEnd = true;
+            if (this.cancelledAt == null) this.cancelledAt = at;
         }
     }
 }
