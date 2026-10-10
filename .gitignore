@@ -1,4 +1,3 @@
-README.md
 target/
 .local/
 .env
@@ -35,3 +34,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Local database migration scripts (run by hand in MySQL Workbench, not versioned) ###
+docs/database/migrations/
