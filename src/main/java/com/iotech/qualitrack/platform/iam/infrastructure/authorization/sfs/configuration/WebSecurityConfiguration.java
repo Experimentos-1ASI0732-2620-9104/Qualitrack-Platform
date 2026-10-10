@@ -2,6 +2,8 @@ package com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.conf
 
 import com.iotech.qualitrack.platform.iam.application.internal.outboundservices.tokens.TokenService;
 import com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.pipeline.BearerAuthorizationRequestFilter;
+import com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.pipeline.ForbiddenRequestHandler;
+import com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.pipeline.ReadOnlyAuditorAuthorizationManager;
 import com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.pipeline.UnauthorizedRequestHandlerEntryPoint;
 import com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.services.UserDetailsServiceImpl;
 import com.iotech.qualitrack.platform.iam.infrastructure.tokens.jwt.BearerTokenService;
@@ -37,17 +39,20 @@ public class WebSecurityConfiguration {
 
     private final UserDetailsServiceImpl userDetailsService;
     private final UnauthorizedRequestHandlerEntryPoint unauthorizedRequestHandlerEntryPoint;
+    private final ForbiddenRequestHandler forbiddenRequestHandler;
     private final BearerTokenService bearerTokenService;
     private final TokenService tokenService;
 
     public WebSecurityConfiguration(
             UserDetailsServiceImpl userDetailsService,
             UnauthorizedRequestHandlerEntryPoint unauthorizedRequestHandlerEntryPoint,
+            ForbiddenRequestHandler forbiddenRequestHandler,
             BearerTokenService bearerTokenService,
             TokenService tokenService
     ) {
         this.userDetailsService = userDetailsService;
         this.unauthorizedRequestHandlerEntryPoint = unauthorizedRequestHandlerEntryPoint;
+        this.forbiddenRequestHandler = forbiddenRequestHandler;
         this.bearerTokenService = bearerTokenService;
         this.tokenService = tokenService;
     }
@@ -96,6 +101,7 @@ public class WebSecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exceptionHandling ->
                         exceptionHandling.authenticationEntryPoint(unauthorizedRequestHandlerEntryPoint)
+                                .accessDeniedHandler(forbiddenRequestHandler)
                 )
                 .authorizeHttpRequests(authorizeRequests -> authorizeRequests
                         .requestMatchers(
@@ -103,11 +109,14 @@ public class WebSecurityConfiguration {
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
                                 "/api/v1/authentication/**",
-                                "/api/v1/subscriptions/stripe/webhook",
                                 "/api/v1/stripe/webhooks"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .anyRequest().authenticated()
+                        // Only quality managers and administrators manage the subscription of the laboratory.
+                        .requestMatchers("/api/v1/subscription-checkout-sessions/**", "/api/v1/subscriptions/**",
+                                "/api/v1/laboratories/*/subscriptions/**")
+                        .hasAnyAuthority("ROLE_QA_MANAGER", "ROLE_ADMIN")
+                        .anyRequest().access(new ReadOnlyAuditorAuthorizationManager())
                 )
                 .addFilterBefore(
                         bearerAuthorizationRequestFilter,
