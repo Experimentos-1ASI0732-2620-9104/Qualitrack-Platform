@@ -26,9 +26,15 @@ public interface DeviationAlertRepository {
 
     List<DeviationAlert> findAllBySeverity(AlertSeverity severity);
 
-    List<DeviationAlert> findAllByEquipmentIdAndStatus(Long equipmentId, AlertStatus status);
+    /**
+     * Alerts of an environment and its monitored containers, newest first.
+     */
+    List<DeviationAlert> findAllByLaboratoryIdAndEnvironmentId(Long laboratoryId, Long environmentId);
 
-    List<DeviationAlert> findAllByBatchIdAndStatus(Long batchId, AlertStatus status);
+    /**
+     * The open alert (unresolved or acknowledged) of the incident of a device and parameter, if any.
+     */
+    Optional<DeviationAlert> findOpenByEquipmentIdAndParameterName(Long equipmentId, String parameterName);
 
     DeviationAlert save(DeviationAlert deviationAlert);
 
