@@ -33,10 +33,11 @@ public class ScenarioContext {
     private final SubscriptionRepository subscriptions;
     private final int port;
 
-    public record Manager(Long userId, String token, Long laboratoryId) {}
+    public record Manager(Long userId, String token, Long laboratoryId, Long environmentId) {}
 
     Manager manager;
     Long equipmentId;
+    Long productId;
     Long batchId;
     Long alertId;
     HttpResponse<String> lastResponse;
@@ -55,8 +56,8 @@ public class ScenarioContext {
                 {"username":"%s","password":"TestPassword123!"}
                 """.formatted(username);
         assertThat(send("POST", "/authentication/sign-up", null, """
-                {"username":"%s","password":"TestPassword123!","roles":["ROLE_QA_MANAGER"],"laboratoryId":null}
-                """.formatted(username)).statusCode()).isEqualTo(201);
+                {"username":"%s","email":"%s@qualitrack.test","password":"TestPassword123!","roles":["ROLE_QA_MANAGER"],"laboratoryId":null}
+                """.formatted(username, username)).statusCode()).isEqualTo(201);
         var session = send("POST", "/authentication/sign-in", null, credentials);
         Long userId = ((Number) JsonPath.read(session.body(), "$.id")).longValue();
         String token = JsonPath.read(session.body(), "$.token");
@@ -72,7 +73,15 @@ public class ScenarioContext {
                 "applicableRegulations":["BPM"]}
                 """.formatted(unique, ruc.incrementAndGet()));
         assertThat(laboratory.statusCode()).withFailMessage(laboratory.body()).isEqualTo(201);
-        return new Manager(userId, token, id(laboratory));
+        var environment = send("POST", "/laboratories/" + id(laboratory) + "/environments", token,
+                "{\"code\":\"ENV-01\",\"name\":\"BDD environment\"}");
+        assertThat(environment.statusCode()).withFailMessage(environment.body()).isEqualTo(201);
+        return new Manager(userId, token, id(laboratory), id(environment));
+    }
+
+    /** Base path of the environment of the acting manager. */
+    String environmentPath() {
+        return "/laboratories/" + manager.laboratoryId() + "/environments/" + manager.environmentId();
     }
 
     HttpResponse<String> send(String method, String path, String token, String body) throws Exception {
