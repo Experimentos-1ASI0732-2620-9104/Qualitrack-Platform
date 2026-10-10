@@ -14,6 +14,8 @@ import java.math.BigDecimal;
 @Getter @Setter
 public class InventoryMaterialEntity extends AuditableAbstractPersistenceEntity {
     @Column(name = "laboratory_id", nullable = false) private Long laboratoryId;
+    /** Nullable only for materials registered before environments existed. */
+    @Column(name = "environment_id") private Long environmentId;
     @Column(name = "legacy_id") private Long legacyId;
     @Column(nullable = false, length = 50) private String code;
     @Column(nullable = false, length = 150) private String name;
