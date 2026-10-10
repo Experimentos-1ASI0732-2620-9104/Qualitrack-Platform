@@ -26,6 +26,14 @@ public class RawMaterialUsageQueryServiceImpl implements RawMaterialUsageQuerySe
     }
 
     @Override
+    public List<RawMaterialUsage> handle(com.iotech.qualitrack.platform.batch.domain.model.queries.GetRawMaterialUsagesByInventoryMaterialQuery query) {
+        return rawMaterialUsageRepository.findAllByRawMaterialId(query.rawMaterialId()).stream()
+                .filter(usage -> usage.getInventoryReceiptId() != null)
+                .sorted(java.util.Comparator.comparing(RawMaterialUsage::getId).reversed())
+                .toList();
+    }
+
+    @Override
     public List<RawMaterialUsage> handle(com.iotech.qualitrack.platform.batch.domain.model.queries.GetRawMaterialHistoryQuery query) {
         return rawMaterialUsageRepository.findAllByRawMaterialId(query.rawMaterialId()).stream()
                 .filter(usage -> usage.getInventoryReceiptId() == null)
