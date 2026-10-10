@@ -1,6 +1,5 @@
 package com.iotech.qualitrack.platform.bdd;
 
-import com.jayway.jsonpath.JsonPath;
 import io.cucumber.java.en.And;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
@@ -21,18 +20,16 @@ public class BatchReportSteps {
 
     @Given("my laboratory has a batch {string} of the product {string}")
     public void myLaboratoryHasABatchOfTheProduct(String batchNumber, String productName) throws Exception {
-        var laboratoryId = context.manager.laboratoryId();
-        var product = context.send("POST", "/laboratories/" + laboratoryId + "/products", context.manager.token(), """
+        var product = context.send("POST", context.environmentPath() + "/products", context.manager.token(), """
                 {"name":"%s","code":"P-%s","description":"Tablets","specifications":"400mg"}
                 """.formatted(productName, UUID.randomUUID()));
         assertThat(product.statusCode()).withFailMessage(product.body()).isEqualTo(201);
-        var products = context.send("GET", "/laboratories/" + laboratoryId + "/products", context.manager.token(), null);
-        long productId = ((Number) JsonPath.read(products.body(), "$[0].id")).longValue();
+        context.productId = ScenarioContext.id(product);
 
-        var batch = context.send("POST", "/batches", context.manager.token(), """
-                {"labId":%d,"productId":%d,"batchNumber":"%s-%s","quantity":5000,"unit":"units",
-                 "startDate":"2026-05-12","notes":"Standard production run"}
-                """.formatted(laboratoryId, productId, batchNumber, UUID.randomUUID().toString().substring(0, 8)));
+        var batch = context.send("POST", context.environmentPath() + "/products/" + context.productId + "/batches",
+                context.manager.token(), """
+                {"batchNumber":"%s-%s","quantity":5000,"unit":"units","startDate":"2026-05-12","notes":"Standard production run"}
+                """.formatted(batchNumber, UUID.randomUUID().toString().substring(0, 8)));
         assertThat(batch.statusCode()).withFailMessage(batch.body()).isEqualTo(201);
         context.batchId = ScenarioContext.id(batch);
     }
@@ -68,7 +65,7 @@ public class BatchReportSteps {
     private java.net.http.HttpResponse<byte[]> generateReport(ScenarioContext.Manager actor, boolean includeDeviations)
             throws Exception {
         return context.download("POST", "/batches/" + context.batchId + "/reports", actor.token(), """
-                {"includeTelemetry":false,"includeDeviations":%s,"format":"PDF","requestedBy":%d}
-                """.formatted(includeDeviations, actor.userId()));
+                {"includeDeviations":%s,"format":"PDF"}
+                """.formatted(includeDeviations));
     }
 }
