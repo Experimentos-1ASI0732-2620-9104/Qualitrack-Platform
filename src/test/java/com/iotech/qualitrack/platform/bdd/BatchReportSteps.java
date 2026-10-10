@@ -1,5 +1,6 @@
 package com.iotech.qualitrack.platform.bdd;
 
+import com.jayway.jsonpath.JsonPath;
 import io.cucumber.java.en.And;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
@@ -64,8 +65,11 @@ public class BatchReportSteps {
 
     private java.net.http.HttpResponse<byte[]> generateReport(ScenarioContext.Manager actor, boolean includeDeviations)
             throws Exception {
-        return context.download("POST", "/batches/" + context.batchId + "/reports", actor.token(), """
+        var generated = context.download("POST", "/batches/" + context.batchId + "/reports", actor.token(), """
                 {"includeDeviations":%s,"format":"PDF"}
                 """.formatted(includeDeviations));
+        if (generated.statusCode() != 201) return generated;
+        var reportId = ((Number) JsonPath.read(new String(generated.body()), "$.id")).longValue();
+        return context.download("GET", "/reports/" + reportId + "/content", actor.token(), null);
     }
 }
