@@ -77,7 +77,7 @@ class StripeWebhookTests {
 
     private StripeSubscriptionDetails details(String status) {
         return new StripeSubscriptionDetails("cus_test", "sub_test", OffsetDateTime.now().toString(),
-                OffsetDateTime.now().plusMonths(1).toString(), status);
+                OffsetDateTime.now().plusMonths(1).toString(), status, false);
     }
 
     private Session session() {
