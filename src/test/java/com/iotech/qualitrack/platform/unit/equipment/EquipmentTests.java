@@ -56,8 +56,8 @@ class EquipmentTests {
 
     @Test
     void maintenanceRecordParsesDateAndTypeCaseInsensitively() {
-        var record = new MaintenanceRecord(new RegisterMaintenanceCommand(1L, "2026-05-20", "John Smith",
-                "Annual calibration", "calibration"));
+        var record = new MaintenanceRecord(new RegisterMaintenanceCommand(1L, 1L, 1L, "2026-05-20", 5L,
+                "Annual calibration", "calibration"), "John Smith", LocalDate.of(2026, 5, 21));
 
         assertThat(record.getMaintenanceDate()).isEqualTo(LocalDate.of(2026, 5, 20));
         assertThat(record.getType()).isEqualTo(MaintenanceType.CALIBRATION);
@@ -65,9 +65,9 @@ class EquipmentTests {
 
     @Test
     void maintenanceRecordRejectsInvalidDateOrType() {
-        assertThatThrownBy(() -> new MaintenanceRecord(new RegisterMaintenanceCommand(1L, "20/05/2026", "John", "Work", "PREVENTIVE")))
+        assertThatThrownBy(() -> new MaintenanceRecord(new RegisterMaintenanceCommand(1L, 1L, 1L, "20/05/2026", 5L, "Work", "PREVENTIVE"), "John", LocalDate.of(2026, 5, 21)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("YYYY-MM-DD");
-        assertThatThrownBy(() -> new MaintenanceRecord(new RegisterMaintenanceCommand(1L, "2026-05-20", "John", "Work", "CLEANING")))
+        assertThatThrownBy(() -> new MaintenanceRecord(new RegisterMaintenanceCommand(1L, 1L, 1L, "2026-05-20", 5L, "Work", "CLEANING"), "John", LocalDate.of(2026, 5, 21)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("CLEANING");
     }
 
