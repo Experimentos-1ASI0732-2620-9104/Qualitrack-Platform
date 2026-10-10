@@ -30,6 +30,8 @@ class SubscriptionAccessTests {
         subscription.synchronizeStatus(SubscriptionStatus.ACTIVE);
         assertThat(subscription.grantsAccess()).isTrue();
         subscription.cancelRenewal(27L, OffsetDateTime.now().toString());
+        assertThat(subscription.grantsAccess()).isTrue();
+        subscription.synchronizeStatus(SubscriptionStatus.CANCELLED);
         assertThat(subscription.grantsAccess()).isFalse();
     }
     @Test void laboratoryAssociationCannotBeReassigned() {
