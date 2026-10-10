@@ -14,9 +14,25 @@ package "IAM Context" {
     * created_at : DATETIME
     * updated_at : DATETIME
     * username : VARCHAR(80) <<UK>>
+    email : VARCHAR(120) <<UK>>
     * password : VARCHAR(255)
     laboratory_id : BIGINT
     * status : VARCHAR(50)
+    * password_change_required : BOOLEAN
+  }
+
+  entity "iam_password_recoveries" as iam_password_recoveries {
+    * id : BIGINT <<PK>>
+    --
+    * created_at : DATETIME
+    * updated_at : DATETIME
+    * user_id : BIGINT <<FK>>
+    * code_hash : VARCHAR(255)
+    * requested_at : DATETIME
+    * expires_at : DATETIME
+    * failed_attempts : INT
+    * status : VARCHAR(20)
+    completed_at : DATETIME
   }
 
   entity "iam_roles" as iam_roles {
@@ -33,7 +49,37 @@ package "IAM Context" {
   }
 
   iam_users ||--o{ iam_user_roles : "user_id"
+  iam_users ||--o{ iam_password_recoveries : "user_id"
   iam_roles ||--o{ iam_user_roles : "role_id"
+}
+
+package "Profile Context" {
+  entity "profiles" as profiles {
+    * id : BIGINT <<PK>>
+    --
+    * created_at : DATETIME
+    * updated_at : DATETIME
+    * user_id : BIGINT <<UK>>
+    full_name : VARCHAR(120)
+    dni : VARCHAR(8)
+    phone_number : VARCHAR(30)
+    location : VARCHAR(120)
+    photo_content_type : VARCHAR(20)
+    photo_size_bytes : INT
+    photo_updated_at : DATETIME
+  }
+
+  entity "profile_photos" as profile_photos {
+    * id : BIGINT <<PK>>
+    --
+    * created_at : DATETIME
+    * updated_at : DATETIME
+    * profile_id : BIGINT <<UK>>
+    * content_type : VARCHAR(20)
+    * content : MEDIUMBLOB
+  }
+
+  profiles ||--o| profile_photos : "profile_id"
 }
 
 package "Laboratory Context" {
@@ -130,6 +176,10 @@ package "Inventory Context" {
     received_on : DATE NOT NULL
     expires_on : DATE NOT NULL
     status : VARCHAR(20) NOT NULL
+    container_monitor_id : BIGINT NULL
+    container_environment_id : BIGINT NULL
+    container_assigned_by : BIGINT NULL
+    container_assigned_at : DATETIME(6) NULL
     created_at : DATETIME(6) NOT NULL
     updated_at : DATETIME(6) NOT NULL
     --
@@ -223,6 +273,11 @@ package "Batch Context" {
     * start_date : VARCHAR(30)
     end_date : VARCHAR(30)
     notes : VARCHAR(500)
+    environment_id : BIGINT
+    container_monitor_id : BIGINT
+    container_environment_id : BIGINT
+    container_assigned_by : BIGINT
+    container_assigned_at : DATETIME
   }
 
   entity "raw_material_usages" as raw_material_usages {
@@ -268,23 +323,38 @@ package "Batch Context" {
 }
 
 package "Tracking Context" {
-  entity "equipment_telemetry" as equipment_telemetry {
+  entity "environmental_profiles" as environmental_profiles {
     * id : BIGINT <<PK>>
     --
     * created_at : DATETIME
     * updated_at : DATETIME
-    * equipment_id : BIGINT <<UK>>
+    * laboratory_id : BIGINT
+    * scope : VARCHAR(30)
+    environment_id : BIGINT <<UK>>
+    device_id : BIGINT <<UK>>
+    * version : BIGINT
+    configured_by : BIGINT
+    configured_at : DATETIME
   }
 
-  entity "equipment_telemetry_statuses" as equipment_telemetry_statuses {
-    * id : BIGINT <<PK>>
+  entity "environmental_profile_thresholds" as environmental_profile_thresholds {
+    * profile_id : BIGINT <<PK>> <<FK>>
+    * position : INT <<PK>>
     --
-    * created_at : DATETIME
-    * updated_at : DATETIME
-    * equipment_id : BIGINT
-    * is_online : BOOLEAN
-    * current_status : VARCHAR(40)
-    * last_heartbeat : VARCHAR(50)
+    * metric : VARCHAR(30)
+    normal_min : DOUBLE
+    normal_max : DOUBLE
+    critical_min : DOUBLE
+    critical_max : DOUBLE
+  }
+
+  entity "environmental_profile_actuation_rules" as environmental_profile_actuation_rules {
+    * profile_id : BIGINT <<PK>> <<FK>>
+    * position : INT <<PK>>
+    --
+    * metric : VARCHAR(30)
+    * state : VARCHAR(20)
+    * action : VARCHAR(30)
   }
 
   entity "telemetry_measurements" as telemetry_measurements {
@@ -292,28 +362,38 @@ package "Tracking Context" {
     --
     * created_at : DATETIME
     * updated_at : DATETIME
+    laboratory_id : BIGINT
+    environment_id : BIGINT
     * equipment_id : BIGINT
     * parameter_name : VARCHAR(120)
-    * value : DOUBLE
+    value : DOUBLE
+    text_value : VARCHAR(120)
     * unit : VARCHAR(40)
     * timestamp : VARCHAR(50)
+    measured_at : DATETIME
+    state : VARCHAR(20)
+    threshold_value : DOUBLE
+    profile_version : BIGINT
   }
 
-  entity "telemetry_history_points" as telemetry_history_points {
+  entity "actuation_events" as actuation_events {
     * id : BIGINT <<PK>>
     --
     * created_at : DATETIME
     * updated_at : DATETIME
-    * equipment_id : BIGINT
-    * parameter_name : VARCHAR(120)
-    * recorded_value : DOUBLE
-    * timestamp : VARCHAR(50)
-    * is_anomaly : BOOLEAN
+    * laboratory_id : BIGINT
+    * environment_id : BIGINT
+    * device_id : BIGINT
+    * action : VARCHAR(30)
+    trigger_metric : VARCHAR(30)
+    trigger_state : VARCHAR(20)
+    * result : VARCHAR(20)
+    * occurred_at : DATETIME
+    profile_version : BIGINT
   }
 
-  equipment_telemetry ||--o{ equipment_telemetry_statuses : "equipment_id"
-  equipment_telemetry ||--o{ telemetry_measurements : "equipment_id"
-  equipment_telemetry ||--o{ telemetry_history_points : "equipment_id"
+  environmental_profiles ||--o{ environmental_profile_thresholds : "profile_id"
+  environmental_profiles ||--o{ environmental_profile_actuation_rules : "profile_id"
 }
 
 package "Compliance and Alerts Context" {
@@ -322,8 +402,13 @@ package "Compliance and Alerts Context" {
     --
     * created_at : DATETIME
     * updated_at : DATETIME
+    laboratory_id : BIGINT
+    environment_id : BIGINT
+    origin : VARCHAR(20)
     * equipment_id : BIGINT
     batch_id : BIGINT
+    measurement_id : BIGINT
+    last_measurement_id : BIGINT
     * parameter_name : VARCHAR(100)
     * recorded_value : DOUBLE
     * threshold_value : DOUBLE
@@ -331,8 +416,13 @@ package "Compliance and Alerts Context" {
     * timestamp : VARCHAR(30)
     * severity : VARCHAR(50)
     * status : VARCHAR(50)
+    deviation_count : INT
+    last_detected_at : DATETIME
+    normalized_at : DATETIME
     acknowledged_by : BIGINT
+    acknowledged_at : DATETIME
     resolved_by : BIGINT
+    resolved_at : DATETIME
     resolution_notes : VARCHAR(500)
   }
 
@@ -355,9 +445,29 @@ package "Compliance and Alerts Context" {
     * updated_at : DATETIME
     * user_id : BIGINT <<UK>>
     * email_enabled : BOOLEAN
-    * sms_enabled : BOOLEAN
     * in_app_enabled : BOOLEAN
     * minimum_severity : VARCHAR(50)
+  }
+
+  entity "notifications" as notifications {
+    * id : BIGINT <<PK>>
+    --
+    * created_at : DATETIME
+    * updated_at : DATETIME
+    * recipient_user_id : BIGINT
+    * laboratory_id : BIGINT
+    * type : VARCHAR(40)
+    severity : VARCHAR(20)
+    * subject_id : BIGINT
+    environment_name : VARCHAR(120)
+    subject_name : VARCHAR(150)
+    parameter_name : VARCHAR(60)
+    recorded_value : DOUBLE
+    unit : VARCHAR(20)
+    actor_name : VARCHAR(150)
+    note : VARCHAR(500)
+    * occurred_at : DATETIME
+    read_at : DATETIME
   }
 }
 
@@ -393,54 +503,6 @@ package "Reporting and Analysis Context" {
     details : VARCHAR(1000)
   }
 
-  entity "kpi_dashboards" as kpi_dashboards {
-    * id : BIGINT <<PK>>
-    --
-    * created_at : DATETIME
-    * updated_at : DATETIME
-    * laboratory_id : BIGINT
-    * timestamp : VARCHAR(30)
-    * overall_health_score : DOUBLE
-  }
-
-  entity "kpi_metrics" as kpi_metrics {
-    * id : BIGINT <<PK>>
-    --
-    * created_at : DATETIME
-    * updated_at : DATETIME
-    * dashboard_id : BIGINT <<FK>>
-    * name : VARCHAR(100)
-    * value : DOUBLE
-    * unit : VARCHAR(20)
-    * target_value : DOUBLE
-    * status : VARCHAR(50)
-    * recorded_at : VARCHAR(30)
-  }
-
-  entity "deviation_trends" as deviation_trends {
-    * id : BIGINT <<PK>>
-    --
-    * created_at : DATETIME
-    * updated_at : DATETIME
-    * parameter_name : VARCHAR(100)
-    * equipment_id : BIGINT
-    * trend_direction : VARCHAR(50)
-  }
-
-  entity "trend_data_points" as trend_data_points {
-    * id : BIGINT <<PK>>
-    --
-    * created_at : DATETIME
-    * updated_at : DATETIME
-    * trend_id : BIGINT <<FK>>
-    * timestamp : VARCHAR(30)
-    * recorded_value : DOUBLE
-    * upper_threshold : DOUBLE
-    * lower_threshold : DOUBLE
-  }
-
-  kpi_dashboards ||--o{ kpi_metrics : "dashboard_id"
-  deviation_trends ||--o{ trend_data_points : "trend_id"
 }
 
 package "Subscription Context" {
@@ -481,6 +543,7 @@ package "Subscription Context" {
     current_period_end : VARCHAR(50)
     cancelled_at : VARCHAR(50)
     cancelled_by : BIGINT
+    * cancel_at_period_end : BOOLEAN DEFAULT FALSE
     --
     <<UK>> stripe_subscription_id
     <<UK>> stripe_checkout_session_id
@@ -515,6 +578,10 @@ raw_materials |o..o| inventory_materials : legacy_id / explicit import
 batches |o..o{ inventory_movements : product_batch_id
 iam_users ||..o{ inventory_movements : actor_id
 inventory_receipts |o..o{ raw_material_usages : inventory_receipt_id
+equipment |o..o{ inventory_receipts : container_monitor_id
+equipment |o..o{ batches : container_monitor_id
+iam_users ||..o| profiles : user_id
+iam_users ||..o{ notifications : recipient_user_id
 
 note bottom of inventory_materials
   Catalogue only: usableStock and physicalStock are calculated,
