@@ -25,6 +25,7 @@ public final class RawMaterialUsagePersistenceAssembler {
         );
         usage.recordStockChange(entity.getStockBefore(), entity.getStockAfter());
         usage.assignInventoryReceipt(entity.getInventoryReceiptId());
+        usage.assignOperation(entity.getOperationId());
         return usage;
     }
 
@@ -46,6 +47,7 @@ public final class RawMaterialUsagePersistenceAssembler {
         entity.setStockBefore(usage.getStockBefore());
         entity.setStockAfter(usage.getStockAfter());
         entity.setInventoryReceiptId(usage.getInventoryReceiptId());
+        entity.setOperationId(usage.getOperationId());
 
         return entity;
     }
