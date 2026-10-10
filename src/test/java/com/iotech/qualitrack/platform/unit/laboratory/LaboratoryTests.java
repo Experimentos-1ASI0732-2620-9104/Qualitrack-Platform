@@ -11,11 +11,20 @@ import com.iotech.qualitrack.platform.laboratory.domain.model.valueobjects.Labor
 import com.iotech.qualitrack.platform.laboratory.domain.model.valueobjects.LaboratoryStatus;
 import com.iotech.qualitrack.platform.laboratory.domain.model.valueobjects.StaffAccessRole;
 import com.iotech.qualitrack.platform.laboratory.domain.model.valueobjects.StockQuantity;
+import com.iotech.qualitrack.platform.laboratory.application.commandservices.StaffCommandService;
+import com.iotech.qualitrack.platform.laboratory.application.internal.commandservices.StaffCommandServiceImpl;
+import com.iotech.qualitrack.platform.laboratory.application.internal.outboundservices.acl.ExternalIamService;
+import com.iotech.qualitrack.platform.laboratory.domain.repositories.LaboratoryRepository;
+import com.iotech.qualitrack.platform.laboratory.domain.repositories.StaffRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 class LaboratoryTests {
     @Test
@@ -52,11 +61,28 @@ class LaboratoryTests {
         var staff = new StaffMember(new RegisterStaffCommand(1L, "Ana Torres", "QA_ANALYST", "ana@lab.pe", StaffAccessRole.OPERATOR));
 
         assertThat(staff.isActive()).isTrue();
-        assertThat(staff.domainEvents()).singleElement().isInstanceOf(StaffRegisteredEvent.class);
 
         staff.deactivate();
         assertThat(staff.isActive()).isFalse();
         assertThatThrownBy(staff::deactivate).isInstanceOf(IllegalStateException.class);
+
+        var staffRepository = mock(StaffRepository.class);
+        var laboratoryRepository = mock(LaboratoryRepository.class);
+        var iam = mock(ExternalIamService.class);
+        var publisher = mock(ApplicationEventPublisher.class);
+        var registration = new RegisterStaffCommand(1L, "Ana Torres", "QA_ANALYST", "ana@lab.pe", StaffAccessRole.OPERATOR);
+        when(laboratoryRepository.existsById(1L)).thenReturn(true);
+        when(staffRepository.save(any(StaffMember.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(iam.createAccount(any(), any(), any(), any()))
+                .thenReturn(new StaffCommandService.StaffAccount(7L, "ana@lab.pe", "temporary", false));
+
+        var result = new StaffCommandServiceImpl(staffRepository, laboratoryRepository, iam, publisher).handle(registration);
+
+        assertThat(result.toOptional()).isPresent();
+        var event = ArgumentCaptor.forClass(StaffRegisteredEvent.class);
+        verify(publisher).publishEvent(event.capture());
+        assertThat(event.getValue().email()).isEqualTo("ana@lab.pe");
+        assertThat(event.getValue().laboratoryId()).isEqualTo(1L);
     }
 
     @Test

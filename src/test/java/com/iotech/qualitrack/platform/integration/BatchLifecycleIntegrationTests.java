@@ -32,13 +32,13 @@ class BatchLifecycleIntegrationTests extends IntegrationTestSupport {
         var released = call("POST", batchPath(owner, productId, batchId) + "/releases", owner.token(), """
                 {"releaseDate":"2026-05-20","notes":"All quality controls passed"}
                 """);
-        assertThat(released.statusCode()).withFailMessage(released.body()).isEqualTo(200);
+        assertThat(released.statusCode()).withFailMessage(released.body()).isEqualTo(201);
         assertThat(json(released, "$.status").toString()).isEqualTo("RELEASED");
 
         var rejected = call("POST", batchPath(owner, productId, batchId) + "/rejections", owner.token(), """
                 {"rejectionDate":"2026-05-21","reason":"Late failure"}
                 """);
-        assertThat(rejected.statusCode()).isEqualTo(400);
+        assertThat(rejected.statusCode()).isEqualTo(409);
         assertThat(json(call("GET", batchPath(owner, productId, batchId), owner.token(), null), "$.status").toString())
                 .isEqualTo("RELEASED");
     }

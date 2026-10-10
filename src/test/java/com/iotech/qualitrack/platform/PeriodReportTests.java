@@ -63,7 +63,7 @@ class PeriodReportTests {
     @Test void emptyPeriodsDoNotInventChartsScoresOrMaintenance() throws Exception {
         var compliance = writer.writeCompliance(ReportFormat.PDF, compliance(List.of()));
         try (var pdf = Loader.loadPDF(compliance)) {
-            assertThat(checkedText(pdf)).contains("No deviation records").doesNotContain("ALERTS BY", "100%");
+            assertThat(checkedText(pdf)).contains("No alerts started in the selected period.").doesNotContain("ALERTS BY", "100%");
             preview("compliance-empty", compliance, pdf);
         }
         var equipment = writer.writeEquipment(ReportFormat.PDF, equipment(List.of(), List.of(), List.of()));
@@ -87,8 +87,8 @@ class PeriodReportTests {
 
     @Test void complianceCsvHasIndependentDataColumnsRatherThanPackedText() {
         String csv = new String(writer.writeCompliance(ReportFormat.CSV, compliance(alerts)), StandardCharsets.UTF_8);
-        assertThat(csv).contains("\"Alert ID\",\"Equipment ID\",\"Batch ID\",\"Recorded at\"",
-                "\"4\",\"4\",\"6\",\"2026-09-05T07:00:00Z\",\"Temperature\",\"9.3\",\"8.0\",\"C\"");
+        assertThat(csv).contains("\"Alert ID\",\"Origin\",\"Device\",\"Detected at\",\"Variable\"",
+                "\"4\",\"ENVIRONMENTAL_DEVICE\",\"Cold chamber\",\"2026-09-05T07:00:00Z\",\"TEMPERATURE\",\"9.3\",\"8.0\",\"C\"");
     }
 
     @Test void equipmentCsvPreservesDetailsAndProtectsSpreadsheetFormulaCells() {

@@ -30,10 +30,10 @@ class BatchReportPdfTests {
             new BatchReportData.Deviation(6L, 6L, "Humidity", 68.0, 65.0, "%", "2026-09-05T05:00:00Z", "WARNING", "RESOLVED", "DEMO: Ventilation adjusted; follow-up reading pending."));
 
     @Test
-    void emptyDeviationsProduceUsefulOnePageRecordWithoutFabricatedScores() throws Exception {
+    void emptyDeviationsProduceUsefulRecordWithoutFabricatedScores() throws Exception {
         byte[] bytes = writer.writeBatchPdf(snapshot(materials, List.of(), true, "DEMO IoTech: synthetic training data, not real production or regulatory evidence."));
         try (var pdf = Loader.loadPDF(bytes)) {
-            assertThat(pdf.getNumberOfPages()).isEqualTo(1);
+            assertThat(pdf.getNumberOfPages()).isEqualTo(2);
             assertThat(new PDFTextStripper().getText(pdf)).contains("QualiTrack", "IoTech", "Batch record", "Material traceability",
                     "DEMO Paracetamol API", "250", "2 days elapsed", "0 recorded deviations", "Billy1", "05 Sep 2026 07:16 UTC")
                     .doesNotContain("100%", "BY SEVERITY", "BATCH_TRACEABILITY", "2026-09-05T07:16");
@@ -48,7 +48,7 @@ class BatchReportPdfTests {
         try (var pdf = Loader.loadPDF(bytes)) {
             assertThat(new PDFTextStripper().getText(pdf)).contains("BY STATUS / COUNT", "BY SEVERITY / COUNT",
                     "Counts from 3 linked deviation record(s).", "Alert #4", "Equipment #4", "Limit: 8 C", "38.4 C",
-                    "critical", "acknowledged", "Ventilation adjusted", "Telemetry: not included");
+                    "critical", "acknowledged", "Ventilation adjusted");
             assertTextInsidePages(pdf);
             preview("batch-with-alerts", bytes, pdf);
         }

@@ -11,12 +11,12 @@ Feature: Consult equipment telemetry
   Scenario: Consult the latest measurements of an equipment
     Given the equipment sent the following measurements:
       | parameter   | value | unit    | timestamp            |
-      | TEMPERATURE | 4.2   | Celsius | 2026-05-12T10:00:00Z |
-      | HUMIDITY    | 55.0  | %       | 2026-05-12T10:00:00Z |
+      | TEMPERATURE | 4.2   | °C      | 2026-05-12T10:00:00Z |
+      | HUMIDITY    | 55.0  | %RH     | 2026-05-12T10:00:00Z |
     When I consult the latest measurements of the equipment
     Then I see 2 measurements
-    And I see a "TEMPERATURE" measurement of 4.2 "Celsius"
-    And I see a "HUMIDITY" measurement of 55.0 "%"
+    And I see a "TEMPERATURE" measurement of 4.2 "°C"
+    And I see a "HUMIDITY" measurement of 55.0 "%RH"
 
   @US06
   Scenario: Filter the telemetry history by dates

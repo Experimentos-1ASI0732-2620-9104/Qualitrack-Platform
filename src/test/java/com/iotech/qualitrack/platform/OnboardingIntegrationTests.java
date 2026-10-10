@@ -44,6 +44,7 @@ class OnboardingIntegrationTests {
     @Autowired UserRepository users;
     @Autowired BatchRepository batches;
     @Autowired RawMaterialUsageRepository materialUsages;
+    @Autowired com.iotech.qualitrack.platform.laboratory.domain.repositories.RawMaterialRepository legacyMaterials;
     @Autowired EquipmentRepository equipment;
     @Autowired MaintenanceRepository maintenance;
     @Autowired DeviationAlertRepository deviations;
@@ -137,13 +138,12 @@ class OnboardingIntegrationTests {
         var response = call("POST", "/laboratories/" + lab + "/compliance-reports", account.token(), """
                 {"startDate":"2026-08-01","endDate":"2026-09-01","format":"CSV","requestedBy":%d}
                 """.formatted(account.id()));
-        assertThat(response.statusCode()).withFailMessage(response.body()).isEqualTo(200);
-        assertThat(response.body()).contains("No deviation records", "Recorded deviations in period");
-        var history = call("GET", "/laboratories/" + lab + "/reports", account.token(), null);
-        long report = ((Number) JsonPath.read(history.body(), "$[0].id")).longValue();
+        assertThat(response.statusCode()).withFailMessage(response.body()).isEqualTo(201);
+        long report = ((Number) JsonPath.read(response.body(), "$.id")).longValue();
         var content = call("GET", "/reports/" + report + "/content", account.token(), null);
         assertThat(content.statusCode()).withFailMessage(content.body()).isEqualTo(200);
-        assertThat(content.body()).isEqualTo(response.body());
+        assertThat(content.body()).contains("The laboratory has no environments.", "Whole calendar days");
+        assertThat(call("GET", "/reports/" + report + "/content", account.token(), null).body()).isEqualTo(content.body());
         assertThat(content.headers().firstValue("content-disposition").orElseThrow()).contains("attachment");
         var other = account();
         activateFixture(other, OffsetDateTime.now().plusDays(5));
@@ -162,28 +162,26 @@ class OnboardingIntegrationTests {
         materialUsages.save(new RawMaterialUsage(null, batch.getId(), 71L, "Fixture material from persistence",
                 75.0, "g", "2026-09-01"));
         var body = """
-                {"includeTelemetry":false,"includeDeviations":true,"format":"PDF","requestedBy":%d}
-                """.formatted(account.id());
+                {"includeDeviations":true,"format":"PDF"}
+                """;
         var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/batches/" + batch.getId() + "/reports"))
                 .header("Content-Type", "application/json").header("Authorization", "Bearer " + account.token())
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build();
-        var generated = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        var requested = http.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(requested.statusCode()).withFailMessage(requested.body()).isEqualTo(201);
+        long report = ((Number) JsonPath.read(requested.body(), "$.id")).longValue();
+        var generated = binaryCall("GET", "/reports/" + report + "/content", account.token(), null);
         assertThat(generated.statusCode()).isEqualTo(200);
         assertThat(generated.headers().firstValue("content-type").orElseThrow()).contains("application/pdf");
         try (var pdf = Loader.loadPDF(generated.body())) {
             assertThat(new PDFTextStripper().getText(pdf)).contains("Material traceability", "Fixture material from persistence",
                     "75", "0 recorded deviations", "DEMO: isolated test record");
         }
-        var history = call("GET", "/laboratories/" + lab + "/reports", account.token(), null);
-        long report = ((Number) JsonPath.read(history.body(), "$[0].id")).longValue();
-        var download = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/reports/" + report + "/content"))
-                .header("Authorization", "Bearer " + account.token()).GET().build();
-        assertThat(http.send(download, HttpResponse.BodyHandlers.ofByteArray()).body()).isEqualTo(generated.body());
+        assertThat(binaryCall("GET", "/reports/" + report + "/content", account.token(), null).body()).isEqualTo(generated.body());
         var other = account();
         activateFixture(other, OffsetDateTime.now().plusDays(5));
         call("POST", "/laboratories", other.token(), laboratory());
-        assertThat(call("POST", "/batches/" + batch.getId() + "/reports", other.token(),
-                body.replace(account.id().toString(), other.id().toString())).statusCode()).isEqualTo(403);
+        assertThat(call("POST", "/batches/" + batch.getId() + "/reports", other.token(), body).statusCode()).isEqualTo(403);
         assertThat(call("POST", "/batches/999999999/reports", account.token(), body).statusCode()).isIn(403, 404);
     }
 
@@ -210,21 +208,23 @@ class OnboardingIntegrationTests {
                 {"startDate":"2026-09-01","endDate":"2026-09-05","format":"PDF","requestedBy":%d}
                 """.formatted(account.id());
         for (String path : java.util.List.of("/laboratories/" + lab + "/compliance-reports", "/laboratories/" + lab + "/environments/" + environmentId + "/equipments/" + device.getId() + "/log-reports")) {
-            var generated = binaryCall("POST", path, account.token(), body);
+            var requested = call("POST", path, account.token(), body);
+            assertThat(requested.statusCode()).withFailMessage(requested.body()).isEqualTo(201);
+            long reportId = ((Number) JsonPath.read(requested.body(), "$.id")).longValue();
+            var generated = binaryCall("GET", "/reports/" + reportId + "/content", account.token(), null);
             assertThat(generated.statusCode()).isEqualTo(200);
             assertThat(generated.headers().firstValue("content-type").orElseThrow()).contains("application/pdf");
             try (var pdf = Loader.loadPDF(generated.body())) {
                 String text = new PDFTextStripper().getText(pdf);
                 assertThat(text).doesNotContain("2026-08-31", "2026-09-06");
-                if (path.contains("compliance")) assertThat(text).contains("PARAM-2026-09-01", "PARAM-2026-09-05");
+                if (path.contains("compliance")) assertThat(text).contains("Environmental report");
                 else assertThat(text).contains("MAINT-2026-09-01", "MAINT-2026-09-05", "LOG-2026-09-01", "LOG-2026-09-05");
             }
-            var history = call("GET", "/laboratories/" + lab + "/reports", account.token(), null);
-            var ids = JsonPath.<java.util.List<Number>>read(history.body(), "$[*].id");
-            long reportId = ids.stream().mapToLong(Number::longValue).max().orElseThrow();
             assertThat(binaryCall("GET", "/reports/" + reportId + "/content", account.token(), null).body()).isEqualTo(generated.body());
-            var csv = call("POST", path, account.token(), body.replace("PDF", "CSV"));
-            assertThat(csv.statusCode()).isEqualTo(200);
+            var csvCreated = call("POST", path, account.token(), body.replace("PDF", "CSV"));
+            assertThat(csvCreated.statusCode()).isEqualTo(201);
+            long csvId = ((Number) JsonPath.read(csvCreated.body(), "$.id")).longValue();
+            var csv = call("GET", "/reports/" + csvId + "/content", account.token(), null);
             assertThat(csv.body()).contains("2026-09-01", "2026-09-05").doesNotContain("2026-08-31", "2026-09-06");
             assertThat(call("POST", path, account.token(), body.replace("2026-09-01", "2026-09-07")).statusCode()).isEqualTo(400);
             assertThat(call("POST", path, null, body).statusCode()).isEqualTo(401);
@@ -322,9 +322,12 @@ class OnboardingIntegrationTests {
     @Test
     void historicalUsagesDoNotInventStockBalances() throws Exception {
         var fixture = stockFixture("kg");
-        materialUsages.save(new RawMaterialUsage(null, fixture.batch(), fixture.material(), "Legacy material",
+        var legacy = legacyMaterials.save(new com.iotech.qualitrack.platform.laboratory.domain.model.aggregates.RawMaterial(null,
+                fixture.lab(), "Legacy material", "OLD-" + UUID.randomUUID(), "Supplier", "SUP-OLD", "2028-01-01",
+                new java.math.BigDecimal("50"), "kg", java.math.BigDecimal.TEN));
+        materialUsages.save(new RawMaterialUsage(null, fixture.batch(), legacy.getId(), "Legacy material",
                 200.0, "kg", "2026-09-01"));
-        var history = call("GET", fixture.environmentPath() + "/raw-materials/" + fixture.material() + "/usages", fixture.account().token(), null);
+        var history = call("GET", "/laboratories/" + fixture.lab() + "/raw-materials/" + legacy.getId() + "/usages", fixture.account().token(), null);
         assertThat(history.body()).contains("\"stockBefore\":null", "\"stockAfter\":null");
         assertThat(stock(fixture)).isEqualTo(100);
     }
