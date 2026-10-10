@@ -12,12 +12,29 @@ entity "equipment" as equipment {
   * <u>id</u> : BIGINT PK AUTO_INCREMENT
   --
   laboratory_id : BIGINT FK NOT NULL
+  environment_id : BIGINT FK NULL
   name : VARCHAR(150) NOT NULL
   type : VARCHAR(100) NOT NULL
   model : VARCHAR(100) NOT NULL
   serial_number : VARCHAR(50) NOT NULL UNIQUE
   status : VARCHAR(50) NOT NULL
-  sensor_external_id : VARCHAR(50)
+  sensor_external_id : VARCHAR(50) UNIQUE
+  device_type : VARCHAR(30) NULL
+  firmware_version : VARCHAR(50) NULL
+  created_at : DATETIME(6) NOT NULL
+  updated_at : DATETIME(6) NOT NULL
+}
+
+entity "equipment_status_changes" as equipment_status_changes {
+  * <u>id</u> : BIGINT PK AUTO_INCREMENT
+  --
+  equipment_id : BIGINT FK NOT NULL
+  environment_id : BIGINT NULL
+  previous_status : VARCHAR(50) NOT NULL
+  new_status : VARCHAR(50) NOT NULL
+  reason : VARCHAR(500) NULL
+  changed_by_user_id : BIGINT NULL
+  changed_at : DATETIME(6) NOT NULL
   created_at : DATETIME(6) NOT NULL
   updated_at : DATETIME(6) NOT NULL
 }
@@ -38,15 +55,24 @@ entity "maintenance_records" as maintenance_records {
   * <u>id</u> : BIGINT PK AUTO_INCREMENT
   --
   equipment_id : BIGINT FK NOT NULL
+  environment_id : BIGINT NULL
   maintenance_date : DATE NOT NULL
   technician_name : VARCHAR(150) NOT NULL
+  technician_staff_id : BIGINT NULL
   description : VARCHAR(1000) NOT NULL
   type : VARCHAR(50) NOT NULL
   created_at : DATETIME(6) NOT NULL
   updated_at : DATETIME(6) NOT NULL
 }
 
+equipment ||--o{ equipment_status_changes : "keeps"
 equipment ||--o{ bpm_parameter_configs : "defines"
 equipment ||--o{ maintenance_records : "records"
+
+note right of equipment
+  device_type: ENVIRONMENTAL_DEVICE | CONTAINER_MONITOR | null.
+  laboratory_id and environment_id reference Laboratory Management
+  by identifier (no cross-context foreign key).
+end note
 
 @enduml
