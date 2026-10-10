@@ -1,30 +1,28 @@
 package com.iotech.qualitrack.platform.batch.domain.model.commands;
 
 /**
- * Command to request the release of a production batch.
+ * Command to release a product batch after quality review (US81, TS71).
  *
- * @param batchId The numeric identifier of the batch. Cannot be null or less than 1.
- * @param releaseDate The date the batch was released. Cannot be null or blank.
- * @param notes Final quality control or compliance remarks. Cannot be null or blank.
+ * @param laboratoryId the laboratory identifier
+ * @param environmentId the environment identifier
+ * @param productId the product identifier
+ * @param batchId the batch to release
+ * @param releaseDate the release date in ISO 8601 format (yyyy-MM-dd)
+ * @param notes final quality remarks (maximum 500 characters)
  */
 public record ReleaseBatchCommand(
+        Long laboratoryId,
+        Long environmentId,
+        Long productId,
         Long batchId,
         String releaseDate,
         String notes
 ) {
-    /**
-     * Compact constructor for ReleaseBatchCommand.
-     * Enforces Fail-Fast validation.
-     */
     public ReleaseBatchCommand {
-        if (batchId == null || batchId <= 0) {
-            throw new IllegalArgumentException("batchId cannot be null or less than 1");
-        }
-        if (releaseDate == null || releaseDate.isBlank()) {
-            throw new IllegalArgumentException("releaseDate cannot be null or blank");
-        }
-        if (notes == null || notes.isBlank()) {
-            throw new IllegalArgumentException("notes cannot be null or blank");
-        }
+        if (batchId == null || batchId <= 0) throw new IllegalArgumentException("batchId cannot be null or less than 1");
+        releaseDate = CreateBatchCommand.isoDate(releaseDate, "releaseDate");
+        if (notes == null || notes.isBlank()) throw new IllegalArgumentException("notes cannot be null or blank");
+        notes = notes.trim();
+        if (notes.length() > 500) throw new IllegalArgumentException("notes cannot exceed 500 characters");
     }
 }
