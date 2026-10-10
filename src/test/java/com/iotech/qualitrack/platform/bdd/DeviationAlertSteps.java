@@ -1,5 +1,9 @@
 package com.iotech.qualitrack.platform.bdd;
 
+import com.iotech.qualitrack.platform.ca.domain.model.aggregates.DeviationAlert;
+import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertSeverity;
+import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertStatus;
+import com.iotech.qualitrack.platform.ca.domain.repositories.DeviationAlertRepository;
 import com.jayway.jsonpath.JsonPath;
 import io.cucumber.java.en.And;
 import io.cucumber.java.en.Given;
@@ -10,9 +14,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class DeviationAlertSteps {
     private final ScenarioContext context;
+    private final DeviationAlertRepository alerts;
 
-    public DeviationAlertSteps(ScenarioContext context) {
+    public DeviationAlertSteps(ScenarioContext context, DeviationAlertRepository alerts) {
         this.context = context;
+        this.alerts = alerts;
     }
 
     @And("the equipment reported a {string} deviation of {string} with value {double} over the threshold {double} {string}")
@@ -23,14 +29,9 @@ public class DeviationAlertSteps {
 
     @And("the equipment reported a {string} deviation of {string} linked to the batch")
     public void theEquipmentReportedADeviationLinkedToTheBatch(String severity, String parameter) throws Exception {
-        var usage = context.send("POST", context.environmentPath() + "/usage-assignments", context.manager.token(),
-                "{\"usage\":\"PRODUCT_STORAGE\"}");
-        assertThat(usage.statusCode()).withFailMessage(usage.body()).isBetween(200, 201);
-        var assigned = context.send("PUT", context.environmentPath() + "/products/" + context.productId + "/batches/"
-                + context.batchId + "/container-assignment", context.manager.token(),
-                "{\"containerMonitorId\":" + context.equipmentId + "}");
-        assertThat(assigned.statusCode()).withFailMessage(assigned.body()).isBetween(200, 201);
-        reportDeviation(severity, parameter, 72.0, 65.0, "%", java.time.Instant.now());
+        var alert = alerts.save(new DeviationAlert(null, context.equipmentId, context.batchId, parameter.toUpperCase(), 72.0,
+                65.0, "%", "2026-05-12T11:00:00Z", AlertSeverity.valueOf(severity), AlertStatus.UNRESOLVED, null, null, null));
+        context.alertId = alert.getId();
     }
 
     @When("I open the alert detail")
