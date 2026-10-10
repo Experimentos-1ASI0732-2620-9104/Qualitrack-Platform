@@ -15,11 +15,14 @@ public class RegisterMaintenanceCommandFromResourceAssembler {
      * @param resource The {@link RegisterMaintenanceResource} resource to convert.
      * @return The {@link RegisterMaintenanceCommand} command that results from the conversion.
      */
-    public static RegisterMaintenanceCommand toCommandFromResource(Long equipmentId, RegisterMaintenanceResource resource) {
+    public static RegisterMaintenanceCommand toCommandFromResource(Long laboratoryId, Long environmentId, Long equipmentId,
+                                                                   RegisterMaintenanceResource resource) {
         return new RegisterMaintenanceCommand(
+                laboratoryId,
+                environmentId,
                 equipmentId,
                 resource.maintenanceDate(),
-                resource.technicianName(),
+                resource.technicianStaffId(),
                 resource.description(),
                 resource.type()
         );
