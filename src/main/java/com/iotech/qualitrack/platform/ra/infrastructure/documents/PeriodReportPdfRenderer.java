@@ -14,39 +14,70 @@ import java.util.stream.Collectors;
 /** Period-specific report contents using the same layout as batch reports. */
 final class PeriodReportPdfRenderer extends AbstractReportPdfRenderer {
     byte[] render(ComplianceReportData data) {
-        return renderDocument("Compliance review report", data.laboratory() + " / Laboratory #" + data.laboratoryId(), () -> {
-            metrics(List.of(new Metric("DEVIATIONS", Integer.toString(data.deviations().size()), INK),
-                    new Metric("NOT RESOLVED", Long.toString(data.deviations().stream().filter(a -> !"RESOLVED".equals(a.status())).count()), AMBER),
-                    new Metric("CRITICAL", Long.toString(data.deviations().stream().filter(a -> "CRITICAL".equals(a.severity())).count()), RED),
-                    new Metric("EQUIPMENT", Long.toString(data.deviations().stream().map(ComplianceReportData.Deviation::equipmentId).distinct().count()), TEAL)));
-            section("01", "Review period");
-            paragraph(date(data.from()) + " to " + date(data.to()) + " (inclusive, recorded calendar dates).", INK);
-            paragraph("Metrics cover alerts recorded in this period. Alert states reflect the time of export; acknowledged alerts remain in the not-resolved count.", MUTED);
-            section("02", "Deviation profile");
-            if (data.deviations().isEmpty()) {
-                paragraph("No deviation records in the selected period. No compliance percentage can be inferred from an empty register.", MUTED);
-            } else {
-                countChartPair("ALERTS BY CURRENT STATUS / COUNT", counts(data.deviations(), ComplianceReportData.Deviation::status),
-                        "ALERTS BY SEVERITY / COUNT", counts(data.deviations(), ComplianceReportData.Deviation::severity));
-                section("03", "Deviation register");
-                var rows = data.deviations().stream().map(a -> List.of(
-                        "Alert #" + a.id() + "\nEquipment #" + a.equipmentId() + "\nBatch: " + value(a.batchId()),
-                        timestamp(a.recordedAt()), value(a.parameter()) + "\n" + number(a.value()) + " " + value(a.unit())
-                                + "\nLimit: " + number(a.threshold()) + " " + value(a.unit()),
-                        human(a.severity()) + "\n" + human(a.status()))).toList();
-                table(List.of("Reference", "Recorded at", "Observation / limit", "Severity / state"), rows,
-                        new float[]{.23f, .24f, .30f, .23f});
-                for (var alert : data.deviations()) {
-                    if (alert.resolution() != null && !alert.resolution().isBlank()) {
-                        paragraph("Alert #" + alert.id() + " - Resolution: " + alert.resolution(), INK);
+        return renderDocument("Environmental report", data.laboratory() + " / Laboratory #" + data.laboratoryId(), () -> {
+            metrics(List.of(new Metric("READINGS", Integer.toString(data.readings()), TEAL),
+                    new Metric("DEVIATIONS", Integer.toString(data.deviations()), AMBER),
+                    new Metric("ALERTS", Integer.toString(data.alerts()), RED),
+                    new Metric("ACTIONS", Integer.toString(data.actions()), INK)));
+            section("01", "Review period and method");
+            paragraph(date(data.from()) + " to " + date(data.to()) + " (whole calendar days, America/Lima). Environments: "
+                    + data.environments().size() + ".", INK);
+            paragraph("Average, minimum and maximum use the numeric readings persisted for each device and variable. Time in "
+                    + "range: each reading evaluated against the profile keeps its condition until the next one; it is the "
+                    + "NORMAL time over the time between the first and last evaluated reading. Deviations are readings worse "
+                    + "than the previous one; critical deviations entered CRITICAL.", MUTED);
+            var number = 2;
+            for (var environment : data.environments()) {
+                section(String.format("%02d", number++), "Environment " + value(environment.code()) + " - " + value(environment.name()));
+                if (environment.indicators().isEmpty()) {
+                    paragraph("No readings in the selected period. No indicator can be inferred without readings.", MUTED);
+                } else {
+                    table(List.of("Device / variable", "Readings", "Average / min / max", "Time in range", "Deviations"),
+                            environment.indicators().stream().map(i -> List.of(
+                                    device(i.device(), i.deviceId()) + "\n" + human(i.metric()),
+                                    Integer.toString(i.readings()),
+                                    number(i.average()) + " / " + number(i.minimum()) + " / " + number(i.maximum()) + " " + value(i.unit()),
+                                    i.timeInRangePercent() == null ? "Not enough readings" : number(i.timeInRangePercent()) + " %",
+                                    i.deviations() + " (" + i.criticalDeviations() + " critical)")).toList(),
+                            new float[]{.27f, .13f, .26f, .17f, .17f});
+                }
+                if (environment.alerts().isEmpty()) {
+                    paragraph("No alerts started in the selected period.", MUTED);
+                } else {
+                    table(List.of("Alert / origin", "Detected at", "Observation / limit", "Severity / state"),
+                            environment.alerts().stream().map(a -> List.of(
+                                    "Alert #" + a.id() + "\n" + human(a.origin()) + ": " + device(a.device(), a.deviceId()),
+                                    timestamp(a.detectedAt()),
+                                    human(a.parameter()) + "\n" + number(a.value()) + " " + value(a.unit())
+                                            + "\nLimit: " + number(a.threshold()) + " " + value(a.unit()),
+                                    human(a.severity()) + "\n" + human(a.status()) + "\n" + value(a.deviationCount()) + (Integer.valueOf(1).equals(a.deviationCount()) ? " deviation" : " deviations")))
+                                    .toList(),
+                            new float[]{.27f, .22f, .27f, .24f});
+                    for (var alert : environment.alerts()) {
+                        if (alert.resolution() != null && !alert.resolution().isBlank()) {
+                            paragraph("Alert #" + alert.id() + " - Resolution: " + alert.resolution(), INK);
+                        }
                     }
                 }
+                if (environment.actions().isEmpty()) {
+                    paragraph("No actions of container monitors in the selected period.", MUTED);
+                } else {
+                    table(List.of("Device", "Action", "Trigger", "Result / executed at"),
+                            environment.actions().stream().map(a -> List.of(device(a.device(), a.deviceId()), human(a.action()),
+                                    human(a.triggerMetric()) + "\n" + human(a.triggerState()),
+                                    human(a.result()) + "\n" + timestamp(a.occurredAt()))).toList(),
+                            new float[]{.27f, .23f, .22f, .28f});
+                }
             }
-            section(data.deviations().isEmpty() ? "03" : "04", "Scope and authorship");
-            paragraph("Recorded operational events; this report is not a regulatory certification. Counts do not demonstrate BPM compliance or measurement coverage.", MUTED);
+            if (data.environments().isEmpty()) paragraph("The laboratory has no environments.", MUTED);
+            section(String.format("%02d", number), "Scope and authorship");
+            paragraph("Recorded readings, alerts and actions; this report is not a regulatory certification. Alert states "
+                    + "reflect the time of export.", MUTED);
             provenance(data.generatedBy(), data.generatedAt());
         });
     }
+
+    private static String device(String name, Long id) { return name == null ? "Device #" + id : name; }
 
     byte[] render(EquipmentReportData data) {
         return renderDocument("Equipment activity report", data.name() + " / Equipment #" + data.equipmentId(), () -> {
