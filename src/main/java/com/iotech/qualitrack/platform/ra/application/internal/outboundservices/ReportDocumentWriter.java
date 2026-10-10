@@ -8,4 +8,5 @@ public interface ReportDocumentWriter {
     byte[] writeBatchPdf(BatchReportData data);
     byte[] writeCompliance(ReportFormat format, ComplianceReportData data);
     byte[] writeEquipment(ReportFormat format, EquipmentReportData data);
+    byte[] writeInventory(ReportFormat format, InventoryReportData data);
 }
