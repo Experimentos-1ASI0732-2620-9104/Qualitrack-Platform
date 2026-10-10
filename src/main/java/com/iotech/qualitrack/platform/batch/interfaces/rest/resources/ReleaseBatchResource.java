@@ -1,29 +1,18 @@
 package com.iotech.qualitrack.platform.batch.interfaces.rest.resources;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
- * Release batch resource.
+ * Request body to release a batch.
  */
-@Schema(
-        name = "ReleaseBatchRequest",
-        description = "Request payload for releasing a production batch",
-        example = "{\"releaseDate\": \"2026-05-20\", \"notes\": \"All quality controls passed\"}"
-)
+@Schema(name = "ReleaseBatchRequest", description = "Release of a product batch after quality review",
+        example = "{\"releaseDate\": \"2026-10-10\", \"notes\": \"All quality controls passed\"}")
 public record ReleaseBatchResource(
-
-        @Schema(description = "Batch release date in ISO 8601 format", example = "2026-05-20")
-        String releaseDate,
-
-        @Schema(description = "Final quality control notes", example = "All quality controls passed")
-        String notes
+        @Schema(description = "Release date in ISO 8601 format", example = "2026-10-10")
+        @NotBlank String releaseDate,
+        @Schema(description = "Final quality remarks", example = "All quality controls passed")
+        @NotBlank @Size(max = 500) String notes
 ) {
-    public ReleaseBatchResource {
-        if (releaseDate == null || releaseDate.isBlank()) {
-            throw new IllegalArgumentException("Release date is required");
-        }
-        if (notes == null || notes.isBlank()) {
-            throw new IllegalArgumentException("Notes are required");
-        }
-    }
 }
