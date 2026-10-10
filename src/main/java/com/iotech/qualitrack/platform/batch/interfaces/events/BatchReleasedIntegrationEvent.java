@@ -13,13 +13,15 @@ import com.iotech.qualitrack.platform.batch.domain.model.events.BatchReleasedEve
  * @param productId the manufactured product identifier
  * @param batchNumber the traceability code assigned to the batch
  * @param releaseDate the date when the batch was released
+ * @param releasedBy the account of the person who released the batch
  */
 public record BatchReleasedIntegrationEvent(
         Long batchId,
         Long laboratoryId,
         Long productId,
         String batchNumber,
-        String releaseDate
+        String releaseDate,
+        Long releasedBy
 ) {
     /**
      * Creates an integration event from an internal domain event.
@@ -33,7 +35,8 @@ public record BatchReleasedIntegrationEvent(
                 event.laboratoryId(),
                 event.productId(),
                 event.batchNumber(),
-                event.releaseDate()
+                event.releaseDate(),
+                event.releasedBy()
         );
     }
 }
