@@ -74,10 +74,10 @@ class UserTests {
 
     @Test
     void onboardingRequiresActiveSubscriptionBeforeLaboratory() {
-        assertThat(new UserOnboarding(1L, null, null, null).nextStep()).isEqualTo("SUBSCRIPTION");
-        assertThat(new UserOnboarding(1L, 3L, 2L, "CANCELLED").nextStep()).isEqualTo("SUBSCRIPTION");
-        assertThat(new UserOnboarding(1L, null, 2L, "ACTIVE").nextStep()).isEqualTo("LABORATORY");
-        assertThat(new UserOnboarding(1L, 3L, 2L, "ACTIVE").nextStep()).isEqualTo("READY");
+        assertThat(new UserOnboarding(1L, null, null, null, false).nextStep()).isEqualTo("SUBSCRIPTION");
+        assertThat(new UserOnboarding(1L, 3L, 2L, "CANCELLED", false).nextStep()).isEqualTo("SUBSCRIPTION");
+        assertThat(new UserOnboarding(1L, null, 2L, "ACTIVE", false).nextStep()).isEqualTo("LABORATORY");
+        assertThat(new UserOnboarding(1L, 3L, 2L, "ACTIVE", false).nextStep()).isEqualTo("READY");
     }
 
     private User newOperator() {

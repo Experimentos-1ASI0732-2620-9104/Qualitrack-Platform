@@ -151,7 +151,7 @@ class InventoryDomainTests {
     }
 
     private RawMaterial material() {
-        return new RawMaterial(10L, 1L, "RM-10", "Material", "kg", BigDecimal.TEN);
+        return new RawMaterial(10L, 1L, 1L, "RM-10", "Material", "kg", BigDecimal.TEN);
     }
 
     private RawMaterialBatch receipt(Long id, Long laboratoryId, Long materialId, String unit,

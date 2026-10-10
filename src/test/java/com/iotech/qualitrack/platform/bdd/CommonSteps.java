@@ -22,11 +22,15 @@ public class CommonSteps {
 
     @And("my laboratory has an equipment named {string}")
     public void myLaboratoryHasAnEquipmentNamed(String name) throws Exception {
-        var equipment = context.send("POST", "/equipments", context.manager.token(), """
-                {"laboratoryId":%d,"name":"%s","type":"REFRIGERATOR","model":"R-200","serialNumber":"SN-%s"}
-                """.formatted(context.manager.laboratoryId(), name, UUID.randomUUID()));
-        assertThat(equipment.statusCode()).withFailMessage(equipment.body()).isEqualTo(201);
-        context.equipmentId = ScenarioContext.id(equipment);
+        var monitor = context.send("POST", "/laboratories/" + context.manager.laboratoryId() + "/devices/container-monitors",
+                context.manager.token(), """
+                {"name":"%s","sensorExternalId":"CNT-%s","serialNumber":"MAC-%s","model":"ESP32-WROOM-32","firmwareVersion":"1.0.3"}
+                """.formatted(name, UUID.randomUUID().toString().substring(0, 8), UUID.randomUUID().toString().substring(0, 8)));
+        assertThat(monitor.statusCode()).withFailMessage(monitor.body()).isEqualTo(201);
+        context.equipmentId = ScenarioContext.id(monitor);
+        var located = context.send("POST", context.environmentPath() + "/container-monitors", context.manager.token(),
+                "{\"deviceId\":" + context.equipmentId + "}");
+        assertThat(located.statusCode()).withFailMessage(located.body()).isEqualTo(201);
     }
 
     @Then("the request is rejected")

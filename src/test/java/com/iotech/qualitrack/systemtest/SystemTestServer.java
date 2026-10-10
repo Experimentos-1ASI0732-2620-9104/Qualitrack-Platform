@@ -40,7 +40,7 @@ public class SystemTestServer {
     @Bean
     ApplicationRunner seedQualityManagerWithPaidSubscription(UserCommandService users, SubscriptionRepository subscriptions) {
         return arguments -> {
-            var user = users.handle(new SignUpCommand(USERNAME, PASSWORD, List.of("ROLE_QA_MANAGER"), null))
+            var user = users.handle(new SignUpCommand(USERNAME, USERNAME + "@qualitrack.test", PASSWORD, List.of("ROLE_QA_MANAGER"), null))
                     .toOptional().orElseThrow(() -> new IllegalStateException("System test user could not be created"));
             var end = OffsetDateTime.now().plusDays(30);
             subscriptions.save(Subscription.activate(new ActivateSubscriptionCommand(user.getId(), null,

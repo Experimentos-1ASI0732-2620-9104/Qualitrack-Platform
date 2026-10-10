@@ -1,6 +1,7 @@
 package com.iotech.qualitrack.platform.unit.batch;
 
 import com.iotech.qualitrack.platform.batch.domain.model.aggregates.Batch;
+import com.iotech.qualitrack.platform.batch.domain.model.aggregates.PharmaceuticalProduct;
 import com.iotech.qualitrack.platform.batch.domain.model.commands.CreateBatchCommand;
 import com.iotech.qualitrack.platform.batch.domain.model.commands.RejectBatchCommand;
 import com.iotech.qualitrack.platform.batch.domain.model.commands.ReleaseBatchCommand;
@@ -23,16 +24,16 @@ class BatchTests {
 
     @Test
     void createCommandRejectsInvalidDataAndNormalizesOptionalFields() {
-        assertThatThrownBy(() -> new CreateBatchCommand(0L, 10L, "LOT", 5.0, "2026-05-12", null, "units"))
+        assertThatThrownBy(() -> new CreateBatchCommand(0L, 1L, 10L, "LOT", 5.0, "units", "2026-05-12", null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new CreateBatchCommand(1L, 10L, " ", 5.0, "2026-05-12", null, "units"))
+        assertThatThrownBy(() -> new CreateBatchCommand(1L, 1L, 10L, " ", 5.0, "units", "2026-05-12", null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new CreateBatchCommand(1L, 10L, "LOT", -1.0, "2026-05-12", null, "units"))
+        assertThatThrownBy(() -> new CreateBatchCommand(1L, 1L, 10L, "LOT", -1.0, "units", "2026-05-12", null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new CreateBatchCommand(1L, 10L, "LOT", Double.NaN, "2026-05-12", null, "units"))
+        assertThatThrownBy(() -> new CreateBatchCommand(1L, 1L, 10L, "LOT", Double.NaN, "units", "2026-05-12", null))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        var command = new CreateBatchCommand(1L, 10L, "LOT", 5.0, "2026-05-12", "  ", null);
+        var command = new CreateBatchCommand(1L, 1L, 10L, "LOT", 5.0, null, "2026-05-12", "  ");
         assertThat(command.notes()).isNull();
         assertThat(command.unit()).isEqualTo("units");
     }
@@ -49,42 +50,43 @@ class BatchTests {
     @Test
     void releaseClosesTheBatchAndCannotBeRepeatedOrRejected() {
         var batch = newBatch();
-        batch.release(new ReleaseBatchCommand(1L, "2026-05-20", "All quality controls passed"));
+        batch.release(new ReleaseBatchCommand(1L, 1L, 10L, 1L, "2026-05-20", "All quality controls passed"));
 
         assertThat(batch.getStatus()).isEqualTo(BatchStatus.RELEASED);
         assertThat(batch.getEndDate()).isEqualTo("2026-05-20");
         assertThat(batch.getNotes()).isEqualTo("All quality controls passed");
-        assertThatThrownBy(() -> batch.release(new ReleaseBatchCommand(1L, "2026-05-21", "Again")))
+        assertThatThrownBy(() -> batch.release(new ReleaseBatchCommand(1L, 1L, 10L, 1L, "2026-05-21", "Again")))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> batch.reject(new RejectBatchCommand(1L, "2026-05-21", "Late failure")))
+        assertThatThrownBy(() -> batch.reject(new RejectBatchCommand(1L, 1L, 10L, 1L, "2026-05-21", "Late failure")))
                 .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void rejectionStoresReasonAndBlocksLaterRelease() {
         var batch = newBatch();
-        batch.reject(new RejectBatchCommand(1L, "2026-05-20", "Failed final quality control"));
+        batch.reject(new RejectBatchCommand(1L, 1L, 10L, 1L, "2026-05-20", "Failed final quality control"));
 
         assertThat(batch.getStatus()).isEqualTo(BatchStatus.REJECTED);
         assertThat(batch.getNotes()).isEqualTo("Failed final quality control");
-        assertThatThrownBy(() -> batch.release(new ReleaseBatchCommand(1L, "2026-05-21", "Override")))
+        assertThatThrownBy(() -> batch.release(new ReleaseBatchCommand(1L, 1L, 10L, 1L, "2026-05-21", "Override")))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> batch.reject(new RejectBatchCommand(1L, "2026-05-21", "Again")))
+        assertThatThrownBy(() -> batch.reject(new RejectBatchCommand(1L, 1L, 10L, 1L, "2026-05-21", "Again")))
                 .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void statusCommandsRequireJustification() {
-        assertThatThrownBy(() -> new ReleaseBatchCommand(1L, "2026-05-20", " "))
+        assertThatThrownBy(() -> new ReleaseBatchCommand(1L, 1L, 10L, 1L, "2026-05-20", " "))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new RejectBatchCommand(1L, "2026-05-20", null))
+        assertThatThrownBy(() -> new RejectBatchCommand(1L, 1L, 10L, 1L, "2026-05-20", null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new RejectBatchCommand(null, "2026-05-20", "Reason"))
+        assertThatThrownBy(() -> new RejectBatchCommand(1L, 1L, 10L, null, "2026-05-20", "Reason"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     private Batch newBatch() {
-        return new Batch(new CreateBatchCommand(1L, 10L, "LOT-2026-A", 5000.0, "2026-05-12", "Standard run", "units"),
-                "Ibuprofen 400mg", "units");
+        var product = new PharmaceuticalProduct(10L, 1L, 1L, "IBU-400", "Ibuprofen 400mg", null, "Tablets", true);
+        return new Batch(new CreateBatchCommand(1L, 1L, 10L, "LOT-2026-A", 5000.0, "units", "2026-05-12", "Standard run"),
+                product);
     }
 }

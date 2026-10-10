@@ -58,7 +58,7 @@ class OnboardingIntegrationTests {
         var account = account();
         assertThat(call("GET", "/users/me/onboarding", account.token(), null).body())
                 .contains("\"nextStep\":\"SUBSCRIPTION\"").contains("\"laboratoryId\":null");
-        assertThat(call("GET", "/equipments?labId=1", account.token(), null).statusCode()).isEqualTo(403);
+        assertThat(call("GET", "/laboratories/1/equipments", account.token(), null).statusCode()).isEqualTo(403);
         assertThat(call("POST", "/laboratories", account.token(), laboratory()).statusCode()).isEqualTo(403);
         activateFixture(account, OffsetDateTime.now().plusDays(5));
         assertThat(call("GET", "/users/me/onboarding", account.token(), null).body())
@@ -70,7 +70,7 @@ class OnboardingIntegrationTests {
         assertThat(subscriptions.findActiveByUserId(account.id()).orElseThrow().getLaboratoryId()).isEqualTo(laboratoryId);
         assertThat(call("GET", "/users/me/onboarding", account.token(), null).body()).contains("\"nextStep\":\"READY\"");
         assertThat(call("POST", "/laboratories", account.token(), laboratory()).statusCode()).isEqualTo(409);
-        assertThat(call("GET", "/equipments?labId=" + laboratoryId, account.token(), null).body()).isEqualTo("[]");
+        assertThat(call("GET", "/laboratories/" + laboratoryId + "/equipments", account.token(), null).body()).isEqualTo("[]");
         var metrics = call("GET", "/laboratories/" + laboratoryId + "/kpi-dashboards", account.token(), null);
         assertThat(metrics.statusCode()).isEqualTo(200);
         assertThat(metrics.body()).contains("\"metrics\":[]").contains("\"overallHealthScore\":null");
@@ -82,7 +82,7 @@ class OnboardingIntegrationTests {
         activateFixture(account, OffsetDateTime.now().minusDays(1));
         var state = call("GET", "/users/me/onboarding?success=true", account.token(), null);
         assertThat(state.body()).contains("\"nextStep\":\"SUBSCRIPTION\"");
-        assertThat(call("GET", "/equipments?labId=1", account.token(), null).statusCode()).isEqualTo(403);
+        assertThat(call("GET", "/laboratories/1/equipments", account.token(), null).statusCode()).isEqualTo(403);
         assertThat(call("GET", "/users/me/onboarding", null, null).statusCode()).isEqualTo(401);
         assertThat(call("GET", "/users/me/onboarding", "invalid-token", null).statusCode()).isEqualTo(401);
     }
@@ -90,7 +90,7 @@ class OnboardingIntegrationTests {
     @Test
     void accountCannotRegisterInAnotherLaboratoryOrSelfAssignAdministrator() throws Exception {
         var request = """
-                {"username":"fixture-%s","password":"TestPassword123!","roles":["ROLE_QA_MANAGER"],"laboratoryId":1}
+                {"username":"fixture-%1$s","email":"fixture-%1$s@qualitrack.test","password":"TestPassword123!","roles":["ROLE_QA_MANAGER"],"laboratoryId":1}
                 """.formatted(UUID.randomUUID());
         assertThat(call("POST", "/authentication/sign-up", null, request).statusCode()).isEqualTo(400);
         request = request.replace("\"laboratoryId\":1", "\"laboratoryId\":null").replace("ROLE_QA_MANAGER", "ROLE_ADMIN");
@@ -109,7 +109,7 @@ class OnboardingIntegrationTests {
         assertThat(secondLab.statusCode()).withFailMessage(secondLab.body()).isEqualTo(201);
         long foreignId = ((Number) JsonPath.read(secondLab.body(), "$.id")).longValue();
         assertThat(call("GET", "/laboratories/" + foreignId, first.token(), null).statusCode()).isEqualTo(403);
-        assertThat(call("GET", "/equipments?labId=" + foreignId, first.token(), null).statusCode()).isEqualTo(403);
+        assertThat(call("GET", "/laboratories/" + foreignId + "/equipments", first.token(), null).statusCode()).isEqualTo(403);
         long foreignSubscription = subscriptions.findActiveByUserId(second.id()).orElseThrow().getId();
         assertThat(call("GET", "/subscriptions/" + foreignSubscription + "/payments", first.token(), null).statusCode()).isEqualTo(403);
     }
@@ -157,7 +157,7 @@ class OnboardingIntegrationTests {
         activateFixture(account, OffsetDateTime.now().plusDays(5));
         var created = call("POST", "/laboratories", account.token(), laboratory());
         long lab = ((Number) JsonPath.read(created.body(), "$.id")).longValue();
-        var batch = batches.save(new Batch(null, lab, 51L, "Fixture product", "FIXTURE-PDF-" + UUID.randomUUID(),
+        var batch = batches.save(new Batch(null, lab, 1L, 51L, "Fixture product", "FIXTURE-PDF-" + UUID.randomUUID(),
                 150.0, "units", BatchStatus.RELEASED, "2026-09-01", "2026-09-03", "DEMO: isolated test record"));
         materialUsages.save(new RawMaterialUsage(null, batch.getId(), 71L, "Fixture material from persistence",
                 75.0, "g", "2026-09-01"));
@@ -193,19 +193,23 @@ class OnboardingIntegrationTests {
         activateFixture(account, OffsetDateTime.now().plusDays(5));
         var created = call("POST", "/laboratories", account.token(), laboratory());
         long lab = ((Number) JsonPath.read(created.body(), "$.id")).longValue();
-        var device = equipment.save(new Equipment(null, lab, "DEMO period fixture", new EquipmentType("Refrigerator"),
-                "Model", "SN-" + UUID.randomUUID(), EquipmentStatus.OPERATIONAL, null));
+        var environment = call("POST", "/laboratories/" + lab + "/environments", account.token(),
+                "{\"code\":\"ENV-01\",\"name\":\"Period environment\"}");
+        assertThat(environment.statusCode()).withFailMessage(environment.body()).isEqualTo(201);
+        long environmentId = ((Number) JsonPath.read(environment.body(), "$.id")).longValue();
+        var device = equipment.save(new Equipment(null, lab, environmentId, "DEMO period fixture", new EquipmentType("Refrigerator"),
+                "Model", "SN-" + UUID.randomUUID(), EquipmentStatus.OPERATIONAL, null, null, null));
         for (String day : java.util.List.of("2026-08-31", "2026-09-01", "2026-09-05", "2026-09-06")) {
             deviations.save(new DeviationAlert(null, device.getId(), null, "PARAM-" + day, 9.3, 8.0, "C", day + "T12:00:00",
                     AlertSeverity.CRITICAL, AlertStatus.UNRESOLVED, null, null, null));
-            maintenance.save(new MaintenanceRecord(null, device.getId(), java.time.LocalDate.parse(day),
-                    "Fixture technician", "MAINT-" + day, MaintenanceType.CALIBRATION));
+            maintenance.save(new MaintenanceRecord(null, device.getId(), null, java.time.LocalDate.parse(day),
+                    "Fixture technician", null, "MAINT-" + day, MaintenanceType.CALIBRATION));
             audit.save(new AuditLogEntry(null, AuditAction.UPDATE, "EQUIPMENT", device.getId(), account.id(), day + "T12:00:00", "LOG-" + day));
         }
         String body = """
                 {"startDate":"2026-09-01","endDate":"2026-09-05","format":"PDF","requestedBy":%d}
                 """.formatted(account.id());
-        for (String path : java.util.List.of("/laboratories/" + lab + "/compliance-reports", "/equipments/" + device.getId() + "/log-reports")) {
+        for (String path : java.util.List.of("/laboratories/" + lab + "/compliance-reports", "/laboratories/" + lab + "/environments/" + environmentId + "/equipments/" + device.getId() + "/log-reports")) {
             var generated = binaryCall("POST", path, account.token(), body);
             assertThat(generated.statusCode()).isEqualTo(200);
             assertThat(generated.headers().firstValue("content-type").orElseThrow()).contains("application/pdf");
@@ -230,7 +234,7 @@ class OnboardingIntegrationTests {
         call("POST", "/laboratories", other.token(), laboratory());
         String otherBody = body.replace("\"requestedBy\":" + account.id(), "\"requestedBy\":" + other.id());
         assertThat(call("POST", "/laboratories/" + lab + "/compliance-reports", other.token(), otherBody).statusCode()).isEqualTo(403);
-        assertThat(call("POST", "/equipments/" + device.getId() + "/log-reports", other.token(), otherBody).statusCode()).isEqualTo(403);
+        assertThat(call("POST", "/laboratories/" + lab + "/environments/" + environmentId + "/equipments/" + device.getId() + "/log-reports", other.token(), otherBody).statusCode()).isEqualTo(403);
     }
 
     private HttpResponse<byte[]> binaryCall(String method, String path, String token, String body) throws Exception {
@@ -265,7 +269,7 @@ class OnboardingIntegrationTests {
         assertThat(stock(fixture)).isEqualTo(50);
         assertThat(((Number) JsonPath.read(accepted.body(), "$.stockBefore")).doubleValue()).isEqualTo(100);
         assertThat(((Number) JsonPath.read(accepted.body(), "$.stockAfter")).doubleValue()).isEqualTo(50);
-        var history = call("GET", "/laboratories/" + fixture.lab() + "/inventory/materials/" + fixture.material() + "/movements", fixture.account().token(), null);
+        var history = call("GET", fixture.environmentPath() + "/raw-materials/" + fixture.material() + "/movements", fixture.account().token(), null);
         assertThat(history.statusCode()).withFailMessage(history.body()).isEqualTo(200);
         assertThat(((Number) JsonPath.read(history.body(), "$[0].productBatchId")).longValue()).isEqualTo(fixture.batch());
         assertThat(((Number) JsonPath.read(history.body(), "$[0].amount")).doubleValue()).isEqualTo(-50);
@@ -308,10 +312,10 @@ class OnboardingIntegrationTests {
     void materialHistoryAndConsumptionRejectOtherLaboratories() throws Exception {
         var owner = stockFixture("kg");
         var other = stockFixture("kg");
-        var crossed = new StockFixture(other.account(), other.lab(), other.batch(), owner.material(), owner.receipt());
+        var crossed = new StockFixture(other.account(), other.lab(), other.environment(), other.product(), other.batch(), owner.material(), owner.receipt());
         assertThat(consume(crossed, "10", "kg").statusCode()).isEqualTo(404);
-        assertThat(call("GET", "/laboratories/" + owner.lab() + "/inventory/materials/" + owner.material() + "/movements", other.account().token(), null).statusCode()).isEqualTo(403);
-        assertThat(call("GET", "/laboratories/" + owner.lab() + "/inventory/materials/" + owner.material() + "/movements", null, null).statusCode()).isEqualTo(401);
+        assertThat(call("GET", owner.environmentPath() + "/raw-materials/" + owner.material() + "/movements", other.account().token(), null).statusCode()).isEqualTo(403);
+        assertThat(call("GET", owner.environmentPath() + "/raw-materials/" + owner.material() + "/movements", null, null).statusCode()).isEqualTo(401);
         assertThat(stock(owner)).isEqualTo(100);
     }
 
@@ -320,62 +324,69 @@ class OnboardingIntegrationTests {
         var fixture = stockFixture("kg");
         materialUsages.save(new RawMaterialUsage(null, fixture.batch(), fixture.material(), "Legacy material",
                 200.0, "kg", "2026-09-01"));
-        var history = call("GET", "/batches/" + fixture.batch() + "/raw-materials", fixture.account().token(), null);
+        var history = call("GET", fixture.environmentPath() + "/raw-materials/" + fixture.material() + "/usages", fixture.account().token(), null);
         assertThat(history.body()).contains("\"stockBefore\":null", "\"stockAfter\":null");
         assertThat(stock(fixture)).isEqualTo(100);
     }
 
-    private record StockFixture(Account account, long lab, long batch, long material, long receipt) { }
+    private record StockFixture(Account account, long lab, long environment, long product, long batch, long material, long receipt) {
+        String environmentPath() { return "/laboratories/" + lab + "/environments/" + environment; }
+    }
 
     private StockFixture stockFixture(String unit) throws Exception {
         var account = account();
         activateFixture(account, OffsetDateTime.now().plusDays(5));
         var laboratory = call("POST", "/laboratories", account.token(), laboratory());
         long lab = ((Number) JsonPath.read(laboratory.body(), "$.id")).longValue();
-        var material = call("POST", "/laboratories/" + lab + "/inventory/materials", account.token(), """
+        var environment = call("POST", "/laboratories/" + lab + "/environments", account.token(),
+                "{\"code\":\"ENV-01\",\"name\":\"Stock environment\"}");
+        assertThat(environment.statusCode()).withFailMessage(environment.body()).isEqualTo(201);
+        long environmentId = ((Number) JsonPath.read(environment.body(), "$.id")).longValue();
+        var path = "/laboratories/" + lab + "/environments/" + environmentId;
+        var material = call("POST", path + "/raw-materials", account.token(), """
                 {"name":"Stock fixture","code":"RM-%s","unit":"%s","minimumStock":10}
                 """.formatted(UUID.randomUUID(), unit));
         assertThat(material.statusCode()).withFailMessage(material.body()).isEqualTo(201);
         long materialId = ((Number) JsonPath.read(material.body(), "$.id")).longValue();
-        var receipt = call("POST", "/laboratories/" + lab + "/inventory/materials/" + materialId + "/receipts", account.token(), """
+        var receipt = call("POST", path + "/raw-materials/" + materialId + "/batches", account.token(), """
                 {"supplier":"Test supplier","batchNumber":"SUP-1","unit":"%s","amount":100,
                  "receivedOn":"%s","expiresOn":"%s"}
                 """.formatted(unit, java.time.LocalDate.now().minusDays(1), java.time.LocalDate.now().plusYears(1)));
         assertThat(receipt.statusCode()).withFailMessage(receipt.body()).isEqualTo(201);
         long receiptId = ((Number) JsonPath.read(receipt.body(), "$.id")).longValue();
-        var review = call("POST", "/laboratories/" + lab + "/inventory/receipts/" + receiptId + "/reviews", account.token(),
+        var review = call("POST", path + "/raw-materials/" + materialId + "/batches/" + receiptId + "/reviews", account.token(),
                 "{\"status\":\"RELEASED\",\"reason\":\"Certificate and quantity reviewed\"}");
-        assertThat(review.statusCode()).withFailMessage(review.body()).isEqualTo(200);
-        var product = call("POST", "/laboratories/" + lab + "/products", account.token(), """
+        assertThat(review.statusCode()).withFailMessage(review.body()).isBetween(200, 201);
+        var product = call("POST", path + "/products", account.token(), """
                 {"name":"Stock test product","code":"P-%s","description":"Test","specifications":"Test only"}
                 """.formatted(UUID.randomUUID()));
         assertThat(product.statusCode()).withFailMessage(product.body()).isEqualTo(201);
-        var products = call("GET", "/laboratories/" + lab + "/products", account.token(), null);
-        long productId = ((Number) JsonPath.read(products.body(), "$[0].id")).longValue();
-        var batch = call("POST", "/batches", account.token(), """
-                {"labId":%d,"productId":%d,"batchNumber":"STOCK-%s","quantity":10,"unit":"g","startDate":"2026-09-08","notes":""}
-                """.formatted(lab, productId, UUID.randomUUID()));
+        long productId = ((Number) JsonPath.read(product.body(), "$.id")).longValue();
+        var batch = call("POST", path + "/products/" + productId + "/batches", account.token(), """
+                {"batchNumber":"STOCK-%s","quantity":10,"unit":"g","startDate":"2026-09-08","notes":""}
+                """.formatted(UUID.randomUUID()));
         assertThat(batch.statusCode()).withFailMessage(batch.body()).isEqualTo(201);
         assertThat(JsonPath.<String>read(batch.body(), "$.unit")).isEqualTo("g");
-        return new StockFixture(account, lab, ((Number) JsonPath.read(batch.body(), "$.id")).longValue(), materialId, receiptId);
+        return new StockFixture(account, lab, environmentId, productId, ((Number) JsonPath.read(batch.body(), "$.id")).longValue(), materialId, receiptId);
     }
 
     private HttpResponse<String> consume(StockFixture fixture, String quantity, String unit) throws Exception {
-        return call("POST", "/laboratories/" + fixture.lab() + "/inventory/consumptions", fixture.account().token(),
-                "{\"receiptId\":" + fixture.receipt() + ",\"productBatchId\":" + fixture.batch()
-                + ",\"amount\":" + quantity + ",\"unit\":\"" + unit + "\",\"operationId\":\"" + UUID.randomUUID() + "\"}");
+        return call("POST", fixture.environmentPath() + "/products/" + fixture.product() + "/batches/" + fixture.batch()
+                + "/raw-material-usages", fixture.account().token(),
+                "{\"rawMaterialBatchId\":" + fixture.receipt()
+                + ",\"amountUsed\":" + quantity + ",\"unit\":\"" + unit + "\",\"operationId\":\"" + UUID.randomUUID() + "\"}");
     }
 
     private double stock(StockFixture fixture) throws Exception {
-        var response = call("GET", "/laboratories/" + fixture.lab() + "/inventory/materials", fixture.account().token(), null);
-        return ((Number) JsonPath.read(response.body(), "$[0].usableStock")).doubleValue();
+        var response = call("GET", fixture.environmentPath() + "/raw-materials/" + fixture.material() + "/stock", fixture.account().token(), null);
+        return ((Number) JsonPath.read(response.body(), "$.usableStock")).doubleValue();
     }
 
     private Account account() throws Exception {
         var username = "fixture-" + UUID.randomUUID();
         var registration = call("POST", "/authentication/sign-up", null, """
-                {"username":"%s","password":"TestPassword123!","roles":["ROLE_QA_MANAGER"],"laboratoryId":null}
-                """.formatted(username));
+                {"username":"%s","email":"%s@qualitrack.test","password":"TestPassword123!","roles":["ROLE_QA_MANAGER"],"laboratoryId":null}
+                """.formatted(username, username));
         assertThat(registration.statusCode()).withFailMessage(registration.body()).isEqualTo(201);
         assertThat(registration.body()).doesNotContain("\"token\"");
         var response = call("POST", "/authentication/sign-in", null, """
