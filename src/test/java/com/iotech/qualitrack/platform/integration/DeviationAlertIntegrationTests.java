@@ -29,12 +29,12 @@ class DeviationAlertIntegrationTests extends IntegrationTestSupport {
         long alertId = id(createAlert(owner));
 
         var acknowledged = acknowledge(owner, alertId);
-        assertThat(acknowledged.statusCode()).withFailMessage(acknowledged.body()).isEqualTo(200);
+        assertThat(acknowledged.statusCode()).withFailMessage(acknowledged.body()).isEqualTo(201);
         assertThat(json(acknowledged, "$.status").toString()).isEqualTo("ACKNOWLEDGED");
         assertThat(((Number) json(acknowledged, "$.acknowledgedBy")).longValue()).isEqualTo(owner.userId());
 
         var resolved = resolve(owner, alertId, "Equipment recalibrated");
-        assertThat(resolved.statusCode()).withFailMessage(resolved.body()).isEqualTo(200);
+        assertThat(resolved.statusCode()).withFailMessage(resolved.body()).isEqualTo(201);
         assertThat(json(resolved, "$.status").toString()).isEqualTo("RESOLVED");
         assertThat(json(resolved, "$.resolutionNotes").toString()).isEqualTo("Equipment recalibrated");
 
