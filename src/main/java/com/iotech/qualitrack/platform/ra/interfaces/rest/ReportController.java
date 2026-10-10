@@ -10,8 +10,9 @@ import org.springframework.http.MediaType;
 import com.iotech.qualitrack.platform.ra.domain.model.queries.GetAuditReportByIdQuery;
 import com.iotech.qualitrack.platform.ra.interfaces.rest.resources.AuditReportResource;
 import com.iotech.qualitrack.platform.ra.interfaces.rest.transform.AuditReportResourceFromEntityAssembler;
+import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
+import com.iotech.qualitrack.platform.shared.interfaces.rest.transform.ErrorResponseAssembler;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,7 +23,6 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
  */
 @RestController
 @RequestMapping(value = "/api/v1/reports", produces = APPLICATION_JSON_VALUE)
-@Tag(name = "Reports", description = "Audit report query endpoints")
 public class ReportController {
 
     private final RaQueryService raQueryService;
@@ -36,9 +36,10 @@ public class ReportController {
     @GetMapping(value = "/{reportId}/content", produces = {"application/pdf", "text/csv"})
     @Operation(summary = "Download a stored report", description = "Returns the original PDF or CSV after checksum verification. "
             + "Requires access to the report laboratory. Returns 404 for legacy metadata without stored content.")
-    public ResponseEntity<byte[]> getReportContent(@PathVariable Long reportId) {
+    public ResponseEntity<?> getReportContent(@PathVariable Long reportId) {
         var document = documents.handle(new GetReportDocumentByIdQuery(reportId));
-        if (document.isEmpty()) return ResponseEntity.notFound().build();
+        if (document.isEmpty()) return ErrorResponseAssembler.toErrorResponseFromApplicationError(
+                ApplicationError.notFound("ReportContent", reportId));
         var value = document.get();
         var pdf = value.format() == ReportFormat.PDF;
         return ResponseEntity.ok().contentType(pdf ? MediaType.APPLICATION_PDF : MediaType.parseMediaType("text/csv;charset=UTF-8"))
@@ -50,15 +51,10 @@ public class ReportController {
 
     @GetMapping(value = "/{reportId}")
     @Operation(summary = "Get audit report by ID")
-    public ResponseEntity<AuditReportResource> getAuditReportById(
-            @PathVariable Long reportId
-    ) {
-        var report = raQueryService.handle(new GetAuditReportByIdQuery(reportId));
-
-        if (report.isEmpty()) return ResponseEntity.notFound().build();
-
-        return ResponseEntity.ok(
-                AuditReportResourceFromEntityAssembler.toResourceFromEntity(report.get())
-        );
+    public ResponseEntity<?> getAuditReportById(@PathVariable Long reportId) {
+        return raQueryService.handle(new GetAuditReportByIdQuery(reportId))
+                .<ResponseEntity<?>>map(report -> ResponseEntity.ok(AuditReportResourceFromEntityAssembler.toResourceFromEntity(report)))
+                .orElseGet(() -> ErrorResponseAssembler.toErrorResponseFromApplicationError(
+                        ApplicationError.notFound("AuditReport", reportId)));
     }
 }
