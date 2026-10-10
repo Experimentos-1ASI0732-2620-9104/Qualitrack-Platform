@@ -66,7 +66,7 @@ class InventoryPersistenceTests {
         assertThatThrownBy(() -> controller.reviewBatch(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), resource))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         authenticate(42L, "ROLE_QA_MANAGER");
-        assertThat(controller.reviewBatch(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), resource).getStatusCode().value()).isEqualTo(200);
+        assertThat(controller.reviewBatch(42L, 1L, receipt.getRawMaterialId(), receipt.getId(), resource).getStatusCode().value()).isEqualTo(201);
         assertThat(queries.handle(new GetRawMaterialMovementsQuery(42L, 1L, receipt.getRawMaterialId())))
             .filteredOn(movement -> movement.type().equals("REVIEW")).hasSize(1);
     }
