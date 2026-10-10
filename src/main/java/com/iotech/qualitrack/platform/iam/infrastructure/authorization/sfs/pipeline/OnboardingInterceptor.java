@@ -24,6 +24,7 @@ public class OnboardingInterceptor implements HandlerInterceptor {
         if (request.getMethod().equals("OPTIONS") || path.startsWith("/api/v1/authentication/")
                 || path.equals("/api/v1/stripe/webhooks")
                 || path.equals("/api/v1/users/me/onboarding")
+                || path.equals("/api/v1/users/me/password-changes")
                 || path.equals("/api/v1/subscription-plans")
                 || path.equals("/api/v1/subscription-checkout-sessions")
                 || path.startsWith("/api/v1/subscriptions/")) return true;
