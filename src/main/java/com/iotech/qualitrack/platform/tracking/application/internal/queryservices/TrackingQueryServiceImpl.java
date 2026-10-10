@@ -1,96 +1,108 @@
 package com.iotech.qualitrack.platform.tracking.application.internal.queryservices;
 
+import com.iotech.qualitrack.platform.tracking.application.internal.outboundservices.acl.TrackingExternalEquipmentService;
 import com.iotech.qualitrack.platform.tracking.application.queryservices.TrackingQueryService;
-import com.iotech.qualitrack.platform.tracking.domain.model.entities.EquipmentTelemetryStatus;
+import com.iotech.qualitrack.platform.tracking.domain.model.aggregates.EnvironmentalProfile;
+import com.iotech.qualitrack.platform.tracking.domain.model.entities.ActuationEvent;
 import com.iotech.qualitrack.platform.tracking.domain.model.entities.Measurement;
-import com.iotech.qualitrack.platform.tracking.domain.model.entities.TelemetryHistoryPoint;
-import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetEquipmentTelemetryStatusByEquipmentIdQuery;
-import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetLatestMeasurementsQuery;
-import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetTelemetryHistoryQuery;
-import com.iotech.qualitrack.platform.tracking.domain.repositories.EquipmentTelemetryStatusRepository;
+import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetActuationEventsQuery;
+import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetContainerMonitorProfileQuery;
+import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetDeviceConnectionQuery;
+import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetDeviceProfileQuery;
+import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetEnvironmentProfileQuery;
+import com.iotech.qualitrack.platform.tracking.domain.model.queries.GetMeasurementsQuery;
+import com.iotech.qualitrack.platform.tracking.domain.model.valueobjects.DeviceConnection;
+import com.iotech.qualitrack.platform.tracking.domain.model.valueobjects.ExpectedCommunicationPeriod;
+import com.iotech.qualitrack.platform.tracking.domain.model.valueobjects.MonitoredMetric.DeviceKind;
+import com.iotech.qualitrack.platform.tracking.domain.repositories.ActuationEventRepository;
+import com.iotech.qualitrack.platform.tracking.domain.repositories.EnvironmentalProfileRepository;
 import com.iotech.qualitrack.platform.tracking.domain.repositories.MeasurementRepository;
-import com.iotech.qualitrack.platform.tracking.domain.repositories.TelemetryHistoryPointRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
-import java.util.LinkedHashMap;
 import java.util.Optional;
+import java.util.stream.Stream;
 
-/**
- * Application service implementation for Tracking read use cases.
- *
- * @remarks
- * Coordinates read-only queries for latest telemetry measurements, equipment
- * telemetry status, and historical telemetry points.
- */
 @Service
 public class TrackingQueryServiceImpl implements TrackingQueryService {
-
+    private final EnvironmentalProfileRepository profileRepository;
     private final MeasurementRepository measurementRepository;
-    private final EquipmentTelemetryStatusRepository statusRepository;
-    private final TelemetryHistoryPointRepository historyPointRepository;
+    private final ActuationEventRepository actuationEventRepository;
+    private final TrackingExternalEquipmentService externalEquipmentService;
+    private final ExpectedCommunicationPeriod expectedCommunicationPeriod;
+    private final Clock clock;
 
-    /**
-     * Creates a new TrackingQueryServiceImpl.
-     *
-     * @param measurementRepository repository for telemetry measurements
-     * @param statusRepository repository for equipment telemetry statuses
-     * @param historyPointRepository repository for telemetry history points
-     */
-    public TrackingQueryServiceImpl(
-            MeasurementRepository measurementRepository,
-            EquipmentTelemetryStatusRepository statusRepository,
-            TelemetryHistoryPointRepository historyPointRepository
-    ) {
+    public TrackingQueryServiceImpl(EnvironmentalProfileRepository profileRepository,
+                                    MeasurementRepository measurementRepository,
+                                    ActuationEventRepository actuationEventRepository,
+                                    TrackingExternalEquipmentService externalEquipmentService,
+                                    ExpectedCommunicationPeriod expectedCommunicationPeriod, Clock trackingClock) {
+        this.profileRepository = profileRepository;
         this.measurementRepository = measurementRepository;
-        this.statusRepository = statusRepository;
-        this.historyPointRepository = historyPointRepository;
+        this.actuationEventRepository = actuationEventRepository;
+        this.externalEquipmentService = externalEquipmentService;
+        this.expectedCommunicationPeriod = expectedCommunicationPeriod;
+        this.clock = trackingClock;
     }
 
-    /**
-     * Retrieves latest telemetry measurements.
-     *
-     * @param query the latest measurements query
-     * @return latest telemetry measurements
-     */
     @Override
-    public List<Measurement> handle(GetLatestMeasurementsQuery query) {
-        var measurements = query.equipmentId() != null
-                ? measurementRepository.findLatestByEquipmentId(query.equipmentId())
-                : measurementRepository.findLatest();
-        record ReadingKey(Long equipmentId, String parameterName, String unit) {}
-        var latest = new LinkedHashMap<ReadingKey, Measurement>();
-        // Repository results are ordered newest first; retain one reading per measured quantity.
-        measurements.forEach(measurement -> latest.putIfAbsent(new ReadingKey(
-                measurement.getEquipmentId(), measurement.getParameterName(), measurement.getUnit()), measurement));
-        return List.copyOf(latest.values());
+    @Transactional(readOnly = true)
+    public Optional<EnvironmentalProfile> handle(GetEnvironmentProfileQuery query) {
+        return profileRepository.findByEnvironmentId(query.environmentId())
+                .filter(profile -> profile.getLaboratoryId().equals(query.laboratoryId()));
     }
 
-    /**
-     * Retrieves the latest telemetry status for an equipment.
-     *
-     * @param query the equipment telemetry status query
-     * @return latest telemetry status when found
-     */
     @Override
-    public Optional<EquipmentTelemetryStatus> handle(
-            GetEquipmentTelemetryStatusByEquipmentIdQuery query
-    ) {
-        return statusRepository.findLatestByEquipmentId(query.equipmentId());
+    @Transactional(readOnly = true)
+    public Optional<EnvironmentalProfile> handle(GetContainerMonitorProfileQuery query) {
+        return externalEquipmentService.findContainerMonitor(query.laboratoryId(), query.environmentId(), query.deviceId())
+                .flatMap(device -> profileRepository.findByDeviceId(device.id()));
     }
 
-    /**
-     * Retrieves telemetry history points matching the query filters.
-     *
-     * @param query the telemetry history query
-     * @return telemetry history points
-     */
     @Override
-    public List<TelemetryHistoryPoint> handle(GetTelemetryHistoryQuery query) {
-        return historyPointRepository.findByFilters(
-                query.equipmentId(),
-                query.from(),
-                query.to()
-        );
+    @Transactional(readOnly = true)
+    public Optional<EnvironmentalProfile> handle(GetDeviceProfileQuery query) {
+        return externalEquipmentService.findDevice(query.laboratoryId(), query.environmentId(), query.deviceId())
+                .flatMap(device -> DeviceKind.CONTAINER_MONITOR.name().equals(device.deviceType())
+                        ? profileRepository.findByDeviceId(device.id())
+                        : handle(new GetEnvironmentProfileQuery(query.laboratoryId(), query.environmentId())));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<List<Measurement>> handle(GetMeasurementsQuery query) {
+        var device = query.deviceId() == null
+                ? externalEquipmentService.findEnvironmentalDevice(query.laboratoryId(), query.environmentId())
+                : externalEquipmentService.findContainerMonitor(query.laboratoryId(), query.environmentId(), query.deviceId());
+        return device.map(value -> measurementRepository.findByDeviceAndPeriod(value.id(),
+                query.metric() == null ? null : query.metric().name(), query.from(), query.to()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<List<ActuationEvent>> handle(GetActuationEventsQuery query) {
+        return externalEquipmentService.findContainerMonitor(query.laboratoryId(), query.environmentId(), query.deviceId())
+                .map(device -> actuationEventRepository.findByDeviceAndPeriod(device.id(), query.from(), query.to()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<DeviceConnection> handle(GetDeviceConnectionQuery query) {
+        return externalEquipmentService.findDevice(query.laboratoryId(), query.environmentId(), query.deviceId())
+                .map(device -> {
+                    // A reading or an action received from the device counts as communication.
+                    var lastCommunication = Stream.of(
+                                    measurementRepository.findLastReceivedAt(device.id()),
+                                    actuationEventRepository.findLastReceivedAt(device.id()))
+                            .flatMap(Optional::stream)
+                            .max(Comparator.<Instant>naturalOrder())
+                            .orElse(null);
+                    return DeviceConnection.evaluate(device.id(), lastCommunication, clock.instant(),
+                            expectedCommunicationPeriod);
+                });
     }
 }
