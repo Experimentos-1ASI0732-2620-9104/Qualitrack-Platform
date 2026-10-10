@@ -12,6 +12,8 @@ public class CaTenantResourceLookup implements TenantResourceLookup {
     public CaTenantResourceLookup(DeviationAlertRepository alerts) { this.alerts = alerts; }
     public Set<String> types() { return Set.of("alertId"); }
     public Optional<ResourceOwner> owner(String type, Long id) {
-        return alerts.findById(id).map(item -> new ResourceOwner("equipmentId", item.getEquipmentId()));
+        return alerts.findById(id).map(item -> item.getLaboratoryId() != null
+                ? new ResourceOwner("laboratoryId", item.getLaboratoryId())
+                : new ResourceOwner("equipmentId", item.getEquipmentId()));
     }
 }
