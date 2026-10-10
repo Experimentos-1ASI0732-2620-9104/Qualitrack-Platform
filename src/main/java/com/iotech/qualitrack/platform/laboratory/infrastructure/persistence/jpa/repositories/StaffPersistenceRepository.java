@@ -33,4 +33,6 @@ public interface StaffPersistenceRepository extends JpaRepository<StaffPersisten
      * Useful for Fail-Fast validation during staff registration to prevent duplicate accounts.
      */
     boolean existsByEmail(String email);
+
+    Optional<StaffPersistenceEntity> findByUserId(Long userId);
 }
