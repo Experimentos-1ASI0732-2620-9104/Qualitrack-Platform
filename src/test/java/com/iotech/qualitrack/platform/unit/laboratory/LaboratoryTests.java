@@ -1,14 +1,15 @@
 package com.iotech.qualitrack.platform.unit.laboratory;
 
 import com.iotech.qualitrack.platform.laboratory.domain.model.aggregates.Laboratory;
-import com.iotech.qualitrack.platform.laboratory.domain.model.aggregates.PharmaceuticalProduct;
+import com.iotech.qualitrack.platform.batch.domain.model.aggregates.PharmaceuticalProduct;
+import com.iotech.qualitrack.platform.batch.domain.model.commands.CreateProductCommand;
 import com.iotech.qualitrack.platform.laboratory.domain.model.aggregates.StaffMember;
 import com.iotech.qualitrack.platform.laboratory.domain.model.commands.CreateLaboratoryCommand;
-import com.iotech.qualitrack.platform.laboratory.domain.model.commands.CreateProductCommand;
 import com.iotech.qualitrack.platform.laboratory.domain.model.commands.RegisterStaffCommand;
 import com.iotech.qualitrack.platform.laboratory.domain.model.events.StaffRegisteredEvent;
 import com.iotech.qualitrack.platform.laboratory.domain.model.valueobjects.LaboratoryName;
 import com.iotech.qualitrack.platform.laboratory.domain.model.valueobjects.LaboratoryStatus;
+import com.iotech.qualitrack.platform.laboratory.domain.model.valueobjects.StaffAccessRole;
 import com.iotech.qualitrack.platform.laboratory.domain.model.valueobjects.StockQuantity;
 import org.junit.jupiter.api.Test;
 
@@ -48,7 +49,7 @@ class LaboratoryTests {
 
     @Test
     void registeredStaffIsActiveAndPublishesAnEvent() {
-        var staff = new StaffMember(new RegisterStaffCommand(1L, "Ana Torres", "QA_ANALYST", "ana@lab.pe"));
+        var staff = new StaffMember(new RegisterStaffCommand(1L, "Ana Torres", "QA_ANALYST", "ana@lab.pe", StaffAccessRole.OPERATOR));
 
         assertThat(staff.isActive()).isTrue();
         assertThat(staff.domainEvents()).singleElement().isInstanceOf(StaffRegisteredEvent.class);
@@ -59,14 +60,14 @@ class LaboratoryTests {
     }
 
     @Test
-    void productIsCreatedActiveAndCanBeToggled() {
-        assertThatThrownBy(() -> new CreateProductCommand(1L, "P-1", "Ibuprofen", "Tablets", " "))
+    void productIsCreatedActiveInItsEnvironment() {
+        assertThatThrownBy(() -> new CreateProductCommand(1L, 1L, "P-1", "Ibuprofen", "Tablets", " "))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        var product = new PharmaceuticalProduct(new CreateProductCommand(1L, "P-1", "Ibuprofen", "Tablets", "400mg"));
+        var product = new PharmaceuticalProduct(new CreateProductCommand(1L, 1L, "P-1", "Ibuprofen", "Tablets", "400mg"));
         assertThat(product.isActive()).isTrue();
-        product.toggleActiveStatus();
-        assertThat(product.isActive()).isFalse();
+        assertThat(product.belongsTo(1L, 1L)).isTrue();
+        assertThat(product.belongsTo(1L, 2L)).isFalse();
     }
 
     @Test
