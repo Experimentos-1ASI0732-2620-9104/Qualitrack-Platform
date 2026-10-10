@@ -15,10 +15,10 @@ import java.util.Optional;
 public interface EquipmentQueryService {
 
     /**
-     * Handles retrieval of an equipment by its unique numeric ID.
+     * Handles retrieval of an equipment of a laboratory by its unique numeric ID.
      *
-     * @param query equipment-id query
-     * @return matching equipment, if found
+     * @param query laboratory and equipment ids
+     * @return matching equipment, if it belongs to the laboratory
      * @see GetEquipmentByIdQuery
      */
     Optional<Equipment> handle(GetEquipmentByIdQuery query);

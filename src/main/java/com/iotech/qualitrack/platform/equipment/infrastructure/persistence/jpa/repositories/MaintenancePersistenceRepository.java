@@ -19,5 +19,5 @@ public interface MaintenancePersistenceRepository extends JpaRepository<Maintena
      * Finds all maintenance records associated with a specific equipment.
      * @param equipmentId The numeric ID of the equipment.
      */
-    List<MaintenancePersistenceEntity> findAllByEquipmentId(Long equipmentId);
+    List<MaintenancePersistenceEntity> findAllByEquipmentIdOrderByMaintenanceDateDescIdDesc(Long equipmentId);
 }

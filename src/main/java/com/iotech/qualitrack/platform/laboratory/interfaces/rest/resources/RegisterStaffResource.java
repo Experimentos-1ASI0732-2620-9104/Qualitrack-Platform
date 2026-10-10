@@ -1,41 +1,23 @@
 package com.iotech.qualitrack.platform.laboratory.interfaces.rest.resources;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
- * Register staff resource.
+ * Request body to register a staff member, who receives an account to sign in.
  */
-@Schema(
-        name = "RegisterStaffRequest",
-        description = "Request payload for registering a new staff member",
-        example = "{\"fullName\": \"Jane Doe\", \"role\": \"Quality Inspector\", \"email\": \"jane.doe@pharmacorp.com\"}"
-)
+@Schema(name = "RegisterStaffRequest", description = "Staff member to register; the e-mail becomes the username")
 public record RegisterStaffResource(
-
-
-
-        @Schema(description = "Full legal name", example = "Jane Doe", minLength = 1, maxLength = 100)
-        String fullName,
-
-        @Schema(description = "Operational or professional role", example = "Quality Inspector", minLength = 1, maxLength = 50)
-        String role,
-
-        @Schema(description = "Corporate email address", example = "jane.doe@pharmacorp.com", minLength = 5, maxLength = 100)
-        String email
+        @Schema(description = "Full legal name", example = "Jane Doe")
+        @NotBlank @Size(max = 150) String fullName,
+        @Schema(description = "Job title in the laboratory", example = "Quality Inspector")
+        @NotBlank @Size(max = 100) String role,
+        @Schema(description = "Corporate email address; the credentials are sent to it", example = "jane.doe@pharmacorp.com")
+        @NotBlank @Email @Size(max = 150) String email,
+        @Schema(description = "OPERATOR registers the operations assigned to them; AUDITOR only consults", example = "OPERATOR",
+                allowableValues = {"OPERATOR", "AUDITOR"})
+        @NotBlank String accessRole
 ) {
-    /**
-     * Validates the resource properties (Fail-Fast).
-     * @throws IllegalArgumentException if any field is missing or invalid.
-     */
-    public RegisterStaffResource {
-        if (fullName == null || fullName.isBlank()) {
-            throw new IllegalArgumentException("Full name is required");
-        }
-        if (email == null || email.isBlank()) {
-            throw new IllegalArgumentException("Email is required");
-        }
-        if (role == null || role.isBlank()) {
-            throw new IllegalArgumentException("Role is required");
-        }
-    }
 }

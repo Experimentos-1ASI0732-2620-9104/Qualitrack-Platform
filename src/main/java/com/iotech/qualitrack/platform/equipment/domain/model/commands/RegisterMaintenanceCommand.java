@@ -1,40 +1,35 @@
 package com.iotech.qualitrack.platform.equipment.domain.model.commands;
 
+import static com.iotech.qualitrack.platform.equipment.domain.model.commands.CommandText.identifier;
+import static com.iotech.qualitrack.platform.equipment.domain.model.commands.CommandText.required;
+
 /**
- * Command to request the registration of a maintenance activity for an equipment.
+ * Command to register a maintenance performed on an equipment of an environment (US49, TS35).
  *
- * @param equipmentId The numeric identifier of the equipment. Cannot be null or less than 1.
- * @param maintenanceDate The date the maintenance was performed. Cannot be null or blank.
- * @param technicianName The name of the responsible technician. Cannot be null or blank.
- * @param description Summary of the activity. Cannot be null or blank.
- * @param type The type of maintenance performed. Cannot be null or blank.
+ * @param laboratoryId laboratory that owns the equipment
+ * @param environmentId environment where the equipment is located
+ * @param equipmentId equipment that received the maintenance
+ * @param maintenanceDate date of the intervention (YYYY-MM-DD)
+ * @param technicianStaffId staff member of the laboratory who performed it
+ * @param description work done, up to 1000 characters
+ * @param type maintenance type (PREVENTIVE, CORRECTIVE, CALIBRATION, INSPECTION or OTHER)
  */
 public record RegisterMaintenanceCommand(
+        Long laboratoryId,
+        Long environmentId,
         Long equipmentId,
         String maintenanceDate,
-        String technicianName,
+        Long technicianStaffId,
         String description,
         String type
 ) {
-    /**
-     * Compact constructor for RegisterMaintenanceCommand.
-     * Enforces Fail-Fast validation.
-     */
     public RegisterMaintenanceCommand {
-        if (equipmentId == null || equipmentId <= 0) {
-            throw new IllegalArgumentException("equipmentId cannot be null or less than 1");
-        }
-        if (maintenanceDate == null || maintenanceDate.isBlank()) {
-            throw new IllegalArgumentException("maintenanceDate cannot be null or blank");
-        }
-        if (technicianName == null || technicianName.isBlank()) {
-            throw new IllegalArgumentException("technicianName cannot be null or blank");
-        }
-        if (description == null || description.isBlank()) {
-            throw new IllegalArgumentException("description cannot be null or blank");
-        }
-        if (type == null || type.isBlank()) {
-            throw new IllegalArgumentException("type cannot be null or blank");
-        }
+        identifier(laboratoryId, "laboratoryId");
+        identifier(environmentId, "environmentId");
+        identifier(equipmentId, "equipmentId");
+        maintenanceDate = required(maintenanceDate, "maintenanceDate", 10);
+        identifier(technicianStaffId, "technicianStaffId");
+        description = required(description, "description", 1000);
+        type = required(type, "type", 50);
     }
 }

@@ -123,6 +123,7 @@ public final class ErrorResponseAssembler {
             case String s when s.endsWith("_NOT_FOUND") -> HttpStatus.NOT_FOUND;
             case "BUSINESS_RULE_VIOLATION" -> HttpStatusCode.valueOf(422);
             case String s when s.endsWith("_CONFLICT") -> HttpStatus.CONFLICT;
+            case "EXTERNAL_SERVICE_ERROR" -> HttpStatus.BAD_GATEWAY;
             case "UNEXPECTED_ERROR" -> HttpStatus.INTERNAL_SERVER_ERROR;
             default -> HttpStatus.INTERNAL_SERVER_ERROR;
         };

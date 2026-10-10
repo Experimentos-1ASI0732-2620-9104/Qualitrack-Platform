@@ -1,5 +1,6 @@
 package com.iotech.qualitrack.platform.equipment.infrastructure.persistence.jpa.repositories;
 
+import com.iotech.qualitrack.platform.equipment.domain.model.valueobjects.IotDeviceType;
 import com.iotech.qualitrack.platform.equipment.infrastructure.persistence.jpa.entities.EquipmentPersistenceEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -33,4 +34,8 @@ public interface EquipmentPersistenceRepository extends JpaRepository<EquipmentP
      * Useful for Fail-Fast validation during equipment registration to prevent duplicates.
      */
     boolean existsBySerialNumber(String serialNumber);
+
+    boolean existsBySensorExternalId(String sensorExternalId);
+
+    boolean existsByEnvironmentIdAndDeviceTypeAndIdNot(Long environmentId, IotDeviceType deviceType, Long id);
 }

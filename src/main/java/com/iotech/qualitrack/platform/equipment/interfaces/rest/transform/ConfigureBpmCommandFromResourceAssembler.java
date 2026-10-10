@@ -9,16 +9,14 @@ import com.iotech.qualitrack.platform.equipment.interfaces.rest.resources.Config
 public class ConfigureBpmCommandFromResourceAssembler {
 
     /**
-     * Converts a ConfigureBpmResource to a ConfigureBpmParametersCommand.
-     *
-     * @param equipmentId The equipment numeric ID extracted from the path.
-     * @param resource The {@link ConfigureBpmResource} resource to convert.
-     * @return The {@link ConfigureBpmParametersCommand} command that results from the conversion.
+     * @throws IllegalArgumentException when a value is missing or the range is not valid (400)
      */
-    public static ConfigureBpmParametersCommand toCommandFromResource(Long equipmentId, ConfigureBpmResource resource) {
+    public static ConfigureBpmParametersCommand toCommandFromResource(Long equipmentId, String parameterName,
+                                                                      ConfigureBpmResource resource) {
+        if (resource == null) throw new IllegalArgumentException("The range of the parameter is required");
         return new ConfigureBpmParametersCommand(
                 equipmentId,
-                resource.parameterName(),
+                parameterName,
                 resource.minValue(),
                 resource.maxValue(),
                 resource.unit()

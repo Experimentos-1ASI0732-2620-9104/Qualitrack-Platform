@@ -1,5 +1,6 @@
 package com.iotech.qualitrack.platform.laboratory.infrastructure.persistence.jpa.entities;
 
+import com.iotech.qualitrack.platform.laboratory.domain.model.valueobjects.StaffAccessRole;
 import com.iotech.qualitrack.platform.shared.infrastructure.persistence.jpa.entities.AuditableAbstractPersistenceEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -41,4 +42,11 @@ public class StaffPersistenceEntity extends AuditableAbstractPersistenceEntity {
 
     @Column(nullable = false)
     private boolean active;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "access_role", length = 20)
+    private StaffAccessRole accessRole;
+
+    @Column(name = "user_id", unique = true)
+    private Long userId;
 }
