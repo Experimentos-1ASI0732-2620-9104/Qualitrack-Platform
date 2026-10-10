@@ -25,4 +25,6 @@ public interface RawMaterialUsagePersistenceRepository extends JpaRepository<Raw
      * @param rawMaterialId The numeric ID of the raw material.
      */
     List<RawMaterialUsagePersistenceEntity> findAllByRawMaterialId(Long rawMaterialId);
+
+    java.util.Optional<RawMaterialUsagePersistenceEntity> findByBatchIdAndOperationId(Long batchId, String operationId);
 }
