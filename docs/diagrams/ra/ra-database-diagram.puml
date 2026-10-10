@@ -36,53 +36,9 @@ entity "audit_log_entries" {
   details : VARCHAR(1000)
 }
 
-entity "kpi_dashboards" {
-  * id : BIGINT PK
-  --
-  created_at : DATETIME NOT NULL
-  updated_at : DATETIME NOT NULL
-  laboratory_id : BIGINT NOT NULL
-  timestamp : VARCHAR(30) NOT NULL
-  overall_health_score : DOUBLE NOT NULL
-}
-
-entity "kpi_metrics" {
-  * id : BIGINT PK
-  --
-  created_at : DATETIME NOT NULL
-  updated_at : DATETIME NOT NULL
-  dashboard_id : BIGINT FK NOT NULL
-  name : VARCHAR(100) NOT NULL
-  value : DOUBLE NOT NULL
-  unit : VARCHAR(20) NOT NULL
-  target_value : DOUBLE NOT NULL
-  status : VARCHAR(50) NOT NULL
-  recorded_at : VARCHAR(30) NOT NULL
-}
-
-entity "deviation_trends" {
-  * id : BIGINT PK
-  --
-  created_at : DATETIME NOT NULL
-  updated_at : DATETIME NOT NULL
-  parameter_name : VARCHAR(100) NOT NULL
-  equipment_id : BIGINT NOT NULL
-  trend_direction : VARCHAR(50) NOT NULL
-}
-
-entity "trend_data_points" {
-  * id : BIGINT PK
-  --
-  created_at : DATETIME NOT NULL
-  updated_at : DATETIME NOT NULL
-  trend_id : BIGINT FK NOT NULL
-  timestamp : VARCHAR(30) NOT NULL
-  recorded_value : DOUBLE NOT NULL
-  upper_threshold : DOUBLE NOT NULL
-  lower_threshold : DOUBLE NOT NULL
-}
-
-kpi_dashboards ||--o{ kpi_metrics : contains
-deviation_trends ||--o{ trend_data_points : contains
+note as IndicatorsNote
+  The indicators (kpi-dashboards, deviation-trends) are calculated on request
+  from the readings of Tracking; they are not stored.
+end note
 
 @enduml

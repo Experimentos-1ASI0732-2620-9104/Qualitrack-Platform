@@ -18,10 +18,30 @@ package "ca.interfaces.acl" <<External>> {
   interface ComplianceContextFacade
 }
 
+package "iam.interfaces.acl" <<External>> {
+  class IamContextFacade
+}
+
+package "iam.interfaces.events" <<External>> {
+  class UserAccountUpdatedIntegrationEvent <<record>>
+}
+
+package "profile.interfaces.events" <<External>> {
+  class ProfileUpdatedIntegrationEvent <<record>>
+}
+
 package "laboratory.domain.model.valueobjects" {
   class LaboratoryName <<value object>>
   class Regulation <<value object>>
   class StockQuantity <<value object>>
+
+  enum EnvironmentUsage {
+    LABORATORY
+    PRODUCTION
+    RAW_MATERIAL_STORAGE
+    PRODUCT_STORAGE
+    OTHER
+  }
 
   enum LaboratoryStatus {
     ACTIVE
@@ -49,15 +69,6 @@ package "laboratory.domain.model.aggregates" {
     + updateProfile(command: UpdateLaboratoryCommand): void
   }
 
-  class PharmaceuticalProduct {
-    - id: Long
-    - laboratoryId: Long
-    - code: String
-    - name: String
-    - description: String
-    - unit: String
-  }
-
   class RawMaterial {
     - id: Long
     - laboratoryId: Long
@@ -68,6 +79,20 @@ package "laboratory.domain.model.aggregates" {
     - minimumThreshold: BigDecimal
   }
 
+  class Environment {
+    - id: Long
+    - laboratoryId: Long
+    - code: String
+    - name: String
+    - description: String
+    - usage: EnvironmentUsage
+    - usageAssignedBy: Long
+    - usageAssignedAt: Instant
+    + update(command: UpdateEnvironmentCommand): void
+    + assignUsage(usage: EnvironmentUsage, assignedBy: Long, assignedAt: Instant): void
+    + belongsTo(laboratoryId: Long): boolean
+  }
+
   class StaffMember {
     - id: Long
     - laboratoryId: Long
@@ -75,14 +100,32 @@ package "laboratory.domain.model.aggregates" {
     - role: String
     - email: String
     - active: Boolean
+    - accessRole: StaffAccessRole
+    - userId: Long
+    + linkAccount(userId: Long): void
+    + rename(fullName: String): boolean
+    + changeEmail(email: String): boolean
+    + belongsTo(laboratoryId: Long): boolean
     + deactivate(): void
+  }
+
+  enum StaffAccessRole {
+    OPERATOR
+    AUDITOR
   }
 }
 
+StaffMember --> StaffAccessRole
+note right of StaffMember
+  Registering a staff member creates their IAM account (the e-mail is the
+  username) through IamContextFacade; deactivating it disables the account.
+end note
+
 Laboratory --|> AbstractDomainAggregateRoot
-PharmaceuticalProduct --|> AbstractDomainAggregateRoot
 RawMaterial --|> AbstractDomainAggregateRoot
 StaffMember --|> AbstractDomainAggregateRoot
+Environment --|> AbstractDomainAggregateRoot
+Environment --> EnvironmentUsage
 
 Laboratory *-- LaboratoryName
 Laboratory *-- LaboratoryAddress
@@ -93,113 +136,145 @@ RawMaterial *-- StockQuantity
 package "laboratory.domain.model.commands" {
   record CreateLaboratoryCommand
   record UpdateLaboratoryCommand
-  record CreateProductCommand
   record CreateRawMaterialCommand
   record RegisterStaffCommand
   record DeactivateStaffCommand
+  record RegisterEnvironmentCommand
+  record UpdateEnvironmentCommand
+  record AssignEnvironmentUsageCommand
 }
 
 package "laboratory.domain.model.queries" {
   record GetLaboratoryByIdQuery
-  record GetProductsByLabIdQuery
   record GetRawMaterialsByLabIdQuery
   record GetLowStockMaterialsByLabIdQuery
   record GetStaffByLabIdQuery
+  record GetEnvironmentsByLaboratoryIdQuery
+  record GetEnvironmentByIdQuery
+  record GetStaffMemberByIdQuery
+  record GetStaffMemberByUserIdQuery
 }
 
 package "laboratory.domain.model.events" {
   record LaboratoryRegisteredEvent
-  record ProductCreatedEvent
   record RawMaterialCreatedEvent
   record RawMaterialLowStockEvent
   record StaffRegisteredEvent
   record StaffDeactivatedEvent
+  record EnvironmentRegisteredEvent
+  record EnvironmentUpdatedEvent
+  record EnvironmentUsageAssignedEvent
 }
 
 package "laboratory.domain.repositories" {
   interface LaboratoryRepository
-  interface ProductRepository
   interface RawMaterialRepository
-  interface StaffRepository
+  interface StaffRepository {
+    + findByUserId(userId: Long): Optional<StaffMember>
+  }
+  interface EnvironmentRepository
 }
 
 package "laboratory.domain.exceptions" {
   class LaboratoryNotFoundException
-  class ProductNotFoundException
   class RawMaterialNotFoundException
   class StaffMemberNotFoundException
 }
 
 package "laboratory.application.commandservices" {
   interface LaboratoryCommandService
-  interface ProductCommandService
   interface RawMaterialCommandService
   interface StaffCommandService
+  interface EnvironmentCommandService
 }
 
 package "laboratory.application.queryservices" {
   interface LaboratoryQueryService
-  interface ProductQueryService
   interface RawMaterialQueryService
-  interface StaffQueryService
+  interface StaffQueryService {
+    + handle(query: GetStaffMemberByUserIdQuery): Optional<StaffMember>
+  }
+  interface EnvironmentQueryService
 }
 
 package "laboratory.application.internal.commandservices" {
   class LaboratoryCommandServiceImpl
-  class ProductCommandServiceImpl
   class RawMaterialCommandServiceImpl
   class StaffCommandServiceImpl
+  class EnvironmentCommandServiceImpl
 }
 
 LaboratoryCommandServiceImpl ..|> LaboratoryCommandService
-ProductCommandServiceImpl ..|> ProductCommandService
 RawMaterialCommandServiceImpl ..|> RawMaterialCommandService
 StaffCommandServiceImpl ..|> StaffCommandService
+EnvironmentCommandServiceImpl ..|> EnvironmentCommandService
 
 LaboratoryCommandServiceImpl --> LaboratoryRepository
-ProductCommandServiceImpl --> ProductRepository
-ProductCommandServiceImpl --> LaboratoryRepository
 RawMaterialCommandServiceImpl --> RawMaterialRepository
 RawMaterialCommandServiceImpl --> LaboratoryRepository
 StaffCommandServiceImpl --> StaffRepository
 StaffCommandServiceImpl --> LaboratoryRepository
+EnvironmentCommandServiceImpl --> EnvironmentRepository
+EnvironmentCommandServiceImpl --> LaboratoryRepository
 
 package "laboratory.application.internal.queryservices" {
   class LaboratoryQueryServiceImpl
-  class ProductQueryServiceImpl
   class RawMaterialQueryServiceImpl
   class StaffQueryServiceImpl
+  class EnvironmentQueryServiceImpl
 }
 
 LaboratoryQueryServiceImpl ..|> LaboratoryQueryService
-ProductQueryServiceImpl ..|> ProductQueryService
 RawMaterialQueryServiceImpl ..|> RawMaterialQueryService
 StaffQueryServiceImpl ..|> StaffQueryService
+EnvironmentQueryServiceImpl ..|> EnvironmentQueryService
 
 LaboratoryQueryServiceImpl --> LaboratoryRepository
-ProductQueryServiceImpl --> ProductRepository
 RawMaterialQueryServiceImpl --> RawMaterialRepository
 StaffQueryServiceImpl --> StaffRepository
+EnvironmentQueryServiceImpl --> EnvironmentRepository
 
 package "laboratory.application.internal.eventhandlers" {
   class LaboratoryRegisteredEventHandler
-  class ProductCreatedEventHandler
   class RawMaterialCreatedEventHandler
   class RawMaterialLowStockEventHandler
   class StaffRegisteredEventHandler
   class StaffDeactivatedEventHandler
+  class EnvironmentRegisteredEventHandler
+  class EnvironmentUpdatedEventHandler
+  class EnvironmentUsageAssignedEventHandler
+  class StaffAccountSynchronizationEventHandler
 }
 
+StaffAccountSynchronizationEventHandler ..> UserAccountUpdatedIntegrationEvent : e-mail
+StaffAccountSynchronizationEventHandler ..> ProfileUpdatedIntegrationEvent : full name
+StaffAccountSynchronizationEventHandler --> StaffRepository
+note bottom of StaffAccountSynchronizationEventHandler
+  The staff list follows what each person changes:
+  the e-mail of the account (IAM) and the name of the profile.
+end note
+
 LaboratoryRegisteredEventHandler ..> LaboratoryRegisteredEvent
-ProductCreatedEventHandler ..> ProductCreatedEvent
 RawMaterialCreatedEventHandler ..> RawMaterialCreatedEvent
 RawMaterialLowStockEventHandler ..> RawMaterialLowStockEvent
 StaffRegisteredEventHandler ..> StaffRegisteredEvent
 StaffDeactivatedEventHandler ..> StaffDeactivatedEvent
+EnvironmentRegisteredEventHandler ..> EnvironmentRegisteredEvent
+EnvironmentUpdatedEventHandler ..> EnvironmentUpdatedEvent
+EnvironmentUsageAssignedEventHandler ..> EnvironmentUsageAssignedEvent
 
 package "laboratory.application.internal.outboundservices.acl" {
   class LaboratoryExternalComplianceService
+  class ExternalIamService {
+    + existsAccount(email: String): boolean
+    + createAccount(laboratoryId, email, fullName, accessRole): StaffAccount
+    + disableAccount(userId: Long): void
+  }
 }
+
+StaffCommandServiceImpl --> ExternalIamService
+
+ExternalIamService --> IamContextFacade
 
 LaboratoryExternalComplianceService --> ComplianceContextFacade
 RawMaterialLowStockEventHandler --> LaboratoryExternalComplianceService
@@ -209,92 +284,129 @@ package "laboratory.application.acl" {
 }
 
 package "laboratory.interfaces.acl" {
-  interface LaboratoryContextFacade
+  interface LaboratoryContextFacade {
+    + findStaffMember(laboratoryId, staffId): Optional<StaffReference>
+    + findStaffMemberByAccount(userId: Long): Optional<StaffReference>
+  }
+  class StaffReference <<record>> {
+    + id: Long
+    + laboratoryId: Long
+    + fullName: String
+    + role: String
+    + active: boolean
+    + userId: Long
+    + accessRole: String
+    + isAccount(userId: Long): boolean
+    + isAuditor(): boolean
+  }
+  class EnvironmentReference <<record>> {
+    + id: Long
+    + laboratoryId: Long
+    + code: String
+    + name: String
+    + usage: String
+    + hasUsage(usage: String): boolean
+  }
 }
+
+LaboratoryContextFacade ..> StaffReference
+LaboratoryContextFacade ..> EnvironmentReference : findEnvironment
+note bottom of EnvironmentReference
+  Inventory stores lots only in RAW_MATERIAL_STORAGE environments and
+  Product Batch stores batches only in PRODUCT_STORAGE environments.
+end note
+note bottom of StaffReference
+  Equipment (maintenance technician) and Product Batch (staff participation)
+  reject auditors: they only consult the records.
+end note
 
 LaboratoryContextFacadeImpl ..|> LaboratoryContextFacade
 LaboratoryContextFacadeImpl --> LaboratoryRepository
-LaboratoryContextFacadeImpl --> ProductRepository
 LaboratoryContextFacadeImpl --> RawMaterialRepository
 LaboratoryContextFacadeImpl --> StaffRepository
+LaboratoryContextFacadeImpl --> EnvironmentQueryService
 
 package "laboratory.interfaces.events" {
   record LaboratoryRegisteredIntegrationEvent
-  record ProductCreatedIntegrationEvent
   record RawMaterialCreatedIntegrationEvent
   record RawMaterialLowStockIntegrationEvent
   record StaffRegisteredIntegrationEvent
   record StaffDeactivatedIntegrationEvent
+  record EnvironmentRegisteredIntegrationEvent
+  record EnvironmentUpdatedIntegrationEvent
+  record EnvironmentUsageAssignedIntegrationEvent
 }
 
 LaboratoryRegisteredEventHandler ..> LaboratoryRegisteredIntegrationEvent
-ProductCreatedEventHandler ..> ProductCreatedIntegrationEvent
 RawMaterialCreatedEventHandler ..> RawMaterialCreatedIntegrationEvent
 RawMaterialLowStockEventHandler ..> RawMaterialLowStockIntegrationEvent
 StaffRegisteredEventHandler ..> StaffRegisteredIntegrationEvent
 StaffDeactivatedEventHandler ..> StaffDeactivatedIntegrationEvent
+EnvironmentRegisteredEventHandler ..> EnvironmentRegisteredIntegrationEvent
+EnvironmentUpdatedEventHandler ..> EnvironmentUpdatedIntegrationEvent
+EnvironmentUsageAssignedEventHandler ..> EnvironmentUsageAssignedIntegrationEvent
 
 package "laboratory.infrastructure.persistence.jpa.entities" {
   class LaboratoryPersistenceEntity
-  class ProductPersistenceEntity
   class RawMaterialPersistenceEntity
   class StaffPersistenceEntity
+  class EnvironmentPersistenceEntity
 }
 
 LaboratoryPersistenceEntity --|> AuditableAbstractPersistenceEntity
-ProductPersistenceEntity --|> AuditableAbstractPersistenceEntity
 RawMaterialPersistenceEntity --|> AuditableAbstractPersistenceEntity
 StaffPersistenceEntity --|> AuditableAbstractPersistenceEntity
+EnvironmentPersistenceEntity --|> AuditableAbstractPersistenceEntity
 
 package "laboratory.infrastructure.persistence.jpa.repositories" {
   interface LaboratoryPersistenceRepository <<JpaRepository>>
-  interface ProductPersistenceRepository <<JpaRepository>>
   interface RawMaterialPersistenceRepository <<JpaRepository>>
   interface StaffPersistenceRepository <<JpaRepository>>
+  interface EnvironmentPersistenceRepository <<JpaRepository>>
 }
 
 LaboratoryPersistenceRepository --> LaboratoryPersistenceEntity
-ProductPersistenceRepository --> ProductPersistenceEntity
 RawMaterialPersistenceRepository --> RawMaterialPersistenceEntity
 StaffPersistenceRepository --> StaffPersistenceEntity
+EnvironmentPersistenceRepository --> EnvironmentPersistenceEntity
 
 package "laboratory.infrastructure.persistence.jpa.assemblers" {
   class LaboratoryPersistenceAssembler
-  class ProductPersistenceAssembler
   class RawMaterialPersistenceAssembler
   class StaffPersistenceAssembler
+  class EnvironmentPersistenceAssembler
 }
 
 LaboratoryPersistenceAssembler ..> Laboratory
 LaboratoryPersistenceAssembler ..> LaboratoryPersistenceEntity
-ProductPersistenceAssembler ..> PharmaceuticalProduct
-ProductPersistenceAssembler ..> ProductPersistenceEntity
 RawMaterialPersistenceAssembler ..> RawMaterial
 RawMaterialPersistenceAssembler ..> RawMaterialPersistenceEntity
 StaffPersistenceAssembler ..> StaffMember
 StaffPersistenceAssembler ..> StaffPersistenceEntity
+EnvironmentPersistenceAssembler ..> Environment
+EnvironmentPersistenceAssembler ..> EnvironmentPersistenceEntity
 
 package "laboratory.infrastructure.persistence.jpa.adapters" {
   class LaboratoryRepositoryImpl
-  class ProductRepositoryImpl
   class RawMaterialRepositoryImpl
   class StaffRepositoryImpl
+  class EnvironmentRepositoryImpl
 }
 
 LaboratoryRepositoryImpl ..|> LaboratoryRepository
-ProductRepositoryImpl ..|> ProductRepository
 RawMaterialRepositoryImpl ..|> RawMaterialRepository
 StaffRepositoryImpl ..|> StaffRepository
+EnvironmentRepositoryImpl ..|> EnvironmentRepository
 
 LaboratoryRepositoryImpl --> LaboratoryPersistenceRepository
-ProductRepositoryImpl --> ProductPersistenceRepository
 RawMaterialRepositoryImpl --> RawMaterialPersistenceRepository
 StaffRepositoryImpl --> StaffPersistenceRepository
 
 LaboratoryRepositoryImpl --> LaboratoryPersistenceAssembler
-ProductRepositoryImpl --> ProductPersistenceAssembler
 RawMaterialRepositoryImpl --> RawMaterialPersistenceAssembler
 StaffRepositoryImpl --> StaffPersistenceAssembler
+EnvironmentRepositoryImpl --> EnvironmentPersistenceRepository
+EnvironmentRepositoryImpl --> EnvironmentPersistenceAssembler
 
 package "laboratory.infrastructure.persistence.jpa.converters" {
   class LaboratoryAddressPersistenceConverter
@@ -310,24 +422,29 @@ package "laboratory.interfaces.rest.resources" {
   record CreateLaboratoryResource
   record UpdateLaboratoryResource
   record LaboratoryResource
-  record CreateProductResource
-  record PharmaceuticalProductResource
-  record CreateRawMaterialResource
   record RawMaterialResource
   record RegisterStaffResource
   record StaffMemberResource
+  record RegisteredStaffResource
+  record StaffCredentialsResource
+  record CreateEnvironmentResource
+  record UpdateEnvironmentResource
+  record AssignEnvironmentUsageResource
+  record EnvironmentResource
+  record EnvironmentUsageAssignmentResource
 }
 
 package "laboratory.interfaces.rest.transform" {
   class CreateLaboratoryCommandFromResourceAssembler
   class UpdateLaboratoryCommandFromResourceAssembler
   class LaboratoryResourceFromEntityAssembler
-  class CreateProductCommandFromResourceAssembler
-  class ProductResourceFromEntityAssembler
-  class CreateRawMaterialCommandFromResourceAssembler
   class RawMaterialResourceFromEntityAssembler
   class RegisterStaffCommandFromResourceAssembler
   class StaffResourceFromEntityAssembler
+  class RegisterEnvironmentCommandFromResourceAssembler
+  class UpdateEnvironmentCommandFromResourceAssembler
+  class AssignEnvironmentUsageCommandFromResourceAssembler
+  class EnvironmentResourceFromEntityAssembler
 }
 
 CreateLaboratoryCommandFromResourceAssembler ..> CreateLaboratoryResource
@@ -337,13 +454,7 @@ UpdateLaboratoryCommandFromResourceAssembler ..> UpdateLaboratoryCommand
 LaboratoryResourceFromEntityAssembler ..> Laboratory
 LaboratoryResourceFromEntityAssembler ..> LaboratoryResource
 
-CreateProductCommandFromResourceAssembler ..> CreateProductResource
-CreateProductCommandFromResourceAssembler ..> CreateProductCommand
-ProductResourceFromEntityAssembler ..> PharmaceuticalProduct
-ProductResourceFromEntityAssembler ..> PharmaceuticalProductResource
 
-CreateRawMaterialCommandFromResourceAssembler ..> CreateRawMaterialResource
-CreateRawMaterialCommandFromResourceAssembler ..> CreateRawMaterialCommand
 RawMaterialResourceFromEntityAssembler ..> RawMaterial
 RawMaterialResourceFromEntityAssembler ..> RawMaterialResource
 
@@ -351,41 +462,51 @@ RegisterStaffCommandFromResourceAssembler ..> RegisterStaffResource
 RegisterStaffCommandFromResourceAssembler ..> RegisterStaffCommand
 StaffResourceFromEntityAssembler ..> StaffMember
 StaffResourceFromEntityAssembler ..> StaffMemberResource
+RegisterEnvironmentCommandFromResourceAssembler ..> CreateEnvironmentResource
+RegisterEnvironmentCommandFromResourceAssembler ..> RegisterEnvironmentCommand
+UpdateEnvironmentCommandFromResourceAssembler ..> UpdateEnvironmentResource
+UpdateEnvironmentCommandFromResourceAssembler ..> UpdateEnvironmentCommand
+AssignEnvironmentUsageCommandFromResourceAssembler ..> AssignEnvironmentUsageResource
+AssignEnvironmentUsageCommandFromResourceAssembler ..> AssignEnvironmentUsageCommand
+EnvironmentResourceFromEntityAssembler ..> Environment
+EnvironmentResourceFromEntityAssembler ..> EnvironmentResource
+EnvironmentResourceFromEntityAssembler ..> EnvironmentUsageAssignmentResource
 
 package "laboratory.interfaces.rest" {
   class LaboratoryController
-  class LaboratoryProductsController
+  note bottom of LaboratoryController
+    PUT /api/v1/laboratories/{laboratoryId} is reserved to the quality managers of the laboratory.
+  end note
   class LaboratoryRawMaterialsController
   class LaboratoryStaffController
-  class StaffController
+  class LaboratoryEnvironmentsController
 }
 
 LaboratoryController --> LaboratoryCommandService
 LaboratoryController --> LaboratoryQueryService
 
-LaboratoryProductsController --> ProductCommandService
-LaboratoryProductsController --> ProductQueryService
 
 LaboratoryRawMaterialsController --> RawMaterialQueryService
 
 LaboratoryStaffController --> StaffCommandService
 LaboratoryStaffController --> StaffQueryService
 
-StaffController --> StaffCommandService
-StaffController --> StaffQueryService
+LaboratoryEnvironmentsController --> EnvironmentCommandService
+LaboratoryEnvironmentsController --> EnvironmentQueryService
+LaboratoryEnvironmentsController --> LaboratoryQueryService
 
 LaboratoryController ..> LaboratoryResourceFromEntityAssembler
 LaboratoryController ..> CreateLaboratoryCommandFromResourceAssembler
 LaboratoryController ..> UpdateLaboratoryCommandFromResourceAssembler
 
-LaboratoryProductsController ..> ProductResourceFromEntityAssembler
-LaboratoryProductsController ..> CreateProductCommandFromResourceAssembler
 
 LaboratoryRawMaterialsController ..> RawMaterialResourceFromEntityAssembler
 
-LaboratoryStaffController ..> StaffResourceFromEntityAssembler
-LaboratoryStaffController ..> RegisterStaffCommandFromResourceAssembler
-StaffController ..> StaffResourceFromEntityAssembler
+LaboratoryLaboratoryStaffController ..> RegisterStaffCommandFromResourceAssembler
+LaboratoryEnvironmentsController ..> EnvironmentResourceFromEntityAssembler
+LaboratoryEnvironmentsController ..> RegisterEnvironmentCommandFromResourceAssembler
+LaboratoryEnvironmentsController ..> UpdateEnvironmentCommandFromResourceAssembler
+LaboratoryEnvironmentsController ..> AssignEnvironmentUsageCommandFromResourceAssembler
 
 package "laboratory.interfaces.acl" {
   interface LegacyInventoryFacade

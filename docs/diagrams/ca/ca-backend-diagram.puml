@@ -13,6 +13,7 @@ package "shared" <<External>> {
   class ApplicationError
   class Result
   class ResponseEntityAssembler
+  interface CurrentUser
 }
 
 package "spring" <<External>> {
@@ -21,12 +22,48 @@ package "spring" <<External>> {
   interface AttributeConverter
 }
 
-package "batch" <<External>> {
-  interface BatchRepository
+package "equipment.interfaces.acl" <<External>> {
+  interface EquipmentContextFacade {
+    + findDevice(laboratoryId, environmentId, deviceId): Optional<DeviceReference>
+    + findEnvironmentalDevice(laboratoryId, environmentId): Optional<DeviceReference>
+  }
 }
 
-package "equipment" <<External>> {
-  interface EquipmentRepository
+package "iam.interfaces.acl" <<External>> {
+  class IamContextFacade {
+    + findActiveAccounts(laboratoryId: Long): List<AccountReference>
+  }
+}
+
+package "laboratory.interfaces.acl" <<External>> {
+  interface LaboratoryContextFacade {
+    + findEnvironment(laboratoryId, environmentId): Optional<EnvironmentReference>
+  }
+}
+
+package "profile.interfaces.acl" <<External>> {
+  class ProfileContextFacade {
+    + displayNameOf(userId: Long): String
+  }
+}
+
+package "batch.interfaces.events" <<External>> {
+  class BatchReleasedIntegrationEvent <<record>>
+  class BatchRejectedIntegrationEvent <<record>>
+}
+
+package "shared.application.notifications" <<External>> {
+  interface EmailSender {
+    + send(message: EmailMessage): boolean
+  }
+}
+
+package "tracking.interfaces" <<External>> {
+  interface TrackingContextFacade {
+    + findActuations(laboratoryId, deviceId, metric, from, to): List<ActuationReference>
+  }
+  class EnvironmentalDeviationDetectedIntegrationEvent <<record>>
+  class EnvironmentalConditionNormalizedIntegrationEvent <<record>>
 }
 
 package "ca.domain.model.valueobjects" {
@@ -34,6 +71,7 @@ package "ca.domain.model.valueobjects" {
     LOW
     WARNING
     CRITICAL
+    + isAtLeast(minimum: AlertSeverity): boolean
   }
 
   enum AlertStatus {
@@ -42,10 +80,20 @@ package "ca.domain.model.valueobjects" {
     RESOLVED
   }
 
+  enum AlertOrigin {
+    ENVIRONMENT
+    CONTAINER
+    + {static} fromDeviceType(deviceType: String): AlertOrigin
+  }
+
   enum ComplianceEventType {
     DEVIATION_ALERT_CREATED
     DEVIATION_ALERT_ACKNOWLEDGED
     DEVIATION_ALERT_RESOLVED
+    DEVIATION_ALERT_ESCALATED
+    DEVIATION_ALERT_EMAIL_SENT
+    DEVIATION_REPEATED
+    DEVIATION_CONDITION_NORMALIZED
     NOTIFICATION_PREFERENCE_UPDATED
     BATCH_BLOCKED
     BATCH_RELEASED
@@ -54,18 +102,76 @@ package "ca.domain.model.valueobjects" {
     EQUIPMENT_CALIBRATION_EXPIRED
     EQUIPMENT_DEVIATION_DETECTED
   }
+
+  class DeviationRegistration <<record>> {
+    + alert: DeviationAlert
+    + created: boolean
+  }
+
+  class RelatedActuation <<record>> {
+    + id: Long
+    + action: String
+    + triggerState: String
+    + result: String
+    + occurredAt: Instant
+  }
+
+  class DeviationAlertDetail <<record>> {
+    + alert: DeviationAlert
+    + actuations: List<RelatedActuation>
+  }
+
+  enum NotificationType {
+    ALERT_OPENED
+    ALERT_ESCALATED
+    ALERT_ACKNOWLEDGED
+    ALERT_RESOLVED
+    BATCH_RELEASED
+    BATCH_REJECTED
+    + subject(): ComplianceEventSubject
+  }
+
+  class NotificationContent <<record>> {
+    + type: NotificationType
+    + severity: AlertSeverity
+    + subjectId: Long
+    + environmentName: String
+    + subjectName: String
+    + parameterName: String
+    + recordedValue: Double
+    + unit: String
+    + actorName: String
+    + note: String
+  }
+
+  class AlertEmailDelivery <<record>> {
+    + alertId: Long
+    + recipients: int
+    + delivered: int
+    + sentAt: String
+    + failed(): boolean
+  }
 }
 
 package "ca.domain.model.commands" {
   class CreateDeviationAlertCommand <<record>> {
-    + equipmentId: Long
-    + batchId: Long
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
+    + measurementId: Long
     + parameterName: String
     + recordedValue: Double
     + thresholdValue: Double
     + unit: String
-    + timestamp: String
     + severity: AlertSeverity
+    + detectedAt: Instant
+  }
+
+  class RecordConditionNormalizedCommand <<record>> {
+    + laboratoryId: Long
+    + deviceId: Long
+    + parameterName: String
+    + normalizedAt: Instant
   }
 
   class AcknowledgeAlertCommand <<record>> {
@@ -82,21 +188,46 @@ package "ca.domain.model.commands" {
   class UpdateNotificationPreferenceCommand <<record>> {
     + userId: Long
     + emailEnabled: Boolean
-    + smsEnabled: Boolean
     + inAppEnabled: Boolean
     + minimumSeverity: AlertSeverity
+  }
+
+  class PublishNotificationCommand <<record>> {
+    + laboratoryId: Long
+    + content: NotificationContent
+    + actorUserId: Long
+  }
+
+  class MarkNotificationAsReadCommand <<record>> {
+    + userId: Long
+    + notificationId: Long
+  }
+
+  class MarkAllNotificationsAsReadCommand <<record>> {
+    + userId: Long
+  }
+
+  class SendAlertEmailNotificationCommand <<record>> {
+    + alertId: Long
+    + requestedBy: Long
   }
 }
 
 package "ca.domain.model.queries" {
   class GetAlertsQuery <<record>> {
-    + equipmentId: Long
-    + batchId: Long
+    + laboratoryId: Long
+    + environmentId: Long
+    + deviceId: Long
     + status: AlertStatus
     + severity: AlertSeverity
+    + activeOnly: boolean
   }
 
   class GetAlertByIdQuery <<record>> {
+    + alertId: Long
+  }
+
+  class GetAlertDetailQuery <<record>> {
     + alertId: Long
   }
 
@@ -107,10 +238,21 @@ package "ca.domain.model.queries" {
   class GetNotificationPreferenceByUserIdQuery <<record>> {
     + userId: Long
   }
+
+  class GetNotificationsQuery <<record>> {
+    + userId: Long
+    + unreadOnly: boolean
+    + limit: int
+  }
+
+  class GetUnreadNotificationCountQuery <<record>> {
+    + userId: Long
+  }
 }
 
 package "ca.domain.model.events" {
   class DeviationAlertCreatedEvent <<record>>
+  class DeviationAlertEscalatedEvent <<record>>
   class DeviationAlertAcknowledgedEvent <<record>>
   class DeviationAlertResolvedEvent <<record>>
   class NotificationPreferenceUpdatedEvent <<record>>
@@ -119,8 +261,13 @@ package "ca.domain.model.events" {
 package "ca.domain.model.aggregates" {
   class DeviationAlert {
     - id: Long
+    - laboratoryId: Long
+    - environmentId: Long
+    - origin: AlertOrigin
     - equipmentId: Long
     - batchId: Long
+    - measurementId: Long
+    - lastMeasurementId: Long
     - parameterName: String
     - recordedValue: Double
     - thresholdValue: Double
@@ -128,13 +275,34 @@ package "ca.domain.model.aggregates" {
     - timestamp: String
     - severity: AlertSeverity
     - status: AlertStatus
+    - deviationCount: Integer
+    - lastDetectedAt: Instant
+    - normalizedAt: Instant
     - acknowledgedBy: Long
+    - acknowledgedAt: Instant
     - resolvedBy: Long
+    - resolvedAt: Instant
     - resolutionNotes: String
-    + acknowledge(command: AcknowledgeAlertCommand): void
-    + resolve(command: ResolveAlertCommand): void
+    + registerDeviation(command: CreateDeviationAlertCommand): boolean
+    + markNormalized(at: Instant): boolean
+    + acknowledge(command: AcknowledgeAlertCommand, at: Instant): void
+    + resolve(command: ResolveAlertCommand, at: Instant): void
     + isUnresolved(): boolean
+    + isOpen(): boolean
     + isCritical(): boolean
+    + detectedAt(): Instant
+  }
+
+  class Notification {
+    - id: Long
+    - recipientUserId: Long
+    - laboratoryId: Long
+    - content: NotificationContent
+    - occurredAt: Instant
+    - readAt: Instant
+    + markAsRead(at: Instant): boolean
+    + isRead(): boolean
+    + belongsTo(userId: Long): boolean
   }
 }
 
@@ -155,23 +323,43 @@ package "ca.domain.model.entities" {
     - id: Long
     - userId: Long
     - emailEnabled: Boolean
-    - smsEnabled: Boolean
     - inAppEnabled: Boolean
     - minimumSeverity: AlertSeverity
     + update(command: UpdateNotificationPreferenceCommand): void
+    + wantsInApp(alertSeverity: AlertSeverity): boolean
+    + wantsEmail(alertSeverity: AlertSeverity): boolean
   }
 }
 
 DeviationAlert --|> AbstractDomainAggregateRoot
 DeviationAlert --> AlertSeverity
 DeviationAlert --> AlertStatus
+DeviationAlert --> AlertOrigin
 DeviationAlert ..> CreateDeviationAlertCommand
 DeviationAlert ..> AcknowledgeAlertCommand
 DeviationAlert ..> ResolveAlertCommand
+DeviationRegistration --> DeviationAlert
+DeviationAlertDetail --> DeviationAlert
+DeviationAlertDetail --> "0..*" RelatedActuation
+note right of DeviationAlert
+  One alert per incident (decisions of 2026-10-04): while it is open,
+  deviations of the same device and parameter are added to it, the
+  severity only rises and a return to normal is noted (normalizedAt);
+  only a person closes it with a resolution.
+end note
 
 ComplianceEvent --> ComplianceEventType
 NotificationPreference --> AlertSeverity
 NotificationPreference ..> UpdateNotificationPreferenceCommand
+Notification --|> AbstractDomainAggregateRoot
+Notification --> NotificationContent
+NotificationContent --> NotificationType
+NotificationContent --> AlertSeverity
+note right of Notification
+  One per person of the laboratory and event (US83): never for what the
+  person did; alerts reach the bell from the minimum severity, batch
+  decisions always. Critical alerts are also e-mailed (US84).
+end note
 
 package "ca.domain.repositories" {
   interface DeviationAlertRepository {
@@ -181,6 +369,8 @@ package "ca.domain.repositories" {
     + findAllByBatchId(batchId: Long): List<DeviationAlert>
     + findAllByStatus(status: AlertStatus): List<DeviationAlert>
     + findAllBySeverity(severity: AlertSeverity): List<DeviationAlert>
+    + findAllByLaboratoryIdAndEnvironmentId(laboratoryId: Long, environmentId: Long): List<DeviationAlert>
+    + findOpenByEquipmentIdAndParameterName(equipmentId: Long, parameterName: String): Optional<DeviationAlert>
     + save(alert: DeviationAlert): DeviationAlert
     + existsById(id: Long): boolean
     + deleteById(id: Long): void
@@ -199,14 +389,25 @@ package "ca.domain.repositories" {
   interface NotificationPreferenceRepository {
     + findById(id: Long): Optional<NotificationPreference>
     + findByUserId(userId: Long): Optional<NotificationPreference>
+    + findByUserIds(userIds: Collection<Long>): List<NotificationPreference>
     + findAll(): List<NotificationPreference>
     + save(preference: NotificationPreference): NotificationPreference
     + existsById(id: Long): boolean
     + existsByUserId(userId: Long): boolean
     + deleteById(id: Long): void
   }
+
+  interface NotificationRepository {
+    + findById(id: Long): Optional<Notification>
+    + findByRecipient(recipientUserId: Long, unreadOnly: boolean, limit: int): List<Notification>
+    + countUnread(recipientUserId: Long): long
+    + save(notification: Notification): Notification
+    + saveAll(notifications: List<Notification>): List<Notification>
+    + markAllAsRead(recipientUserId: Long, readAt: Instant): int
+  }
 }
 
+NotificationRepository --> Notification
 DeviationAlertRepository --> DeviationAlert
 ComplianceEventRepository --> ComplianceEvent
 NotificationPreferenceRepository --> NotificationPreference
@@ -219,7 +420,8 @@ package "ca.domain.exceptions" {
 
 package "ca.application.commandservices" {
   interface CaCommandService {
-    + handle(command: CreateDeviationAlertCommand): Result<Long, ApplicationError>
+    + handle(command: CreateDeviationAlertCommand): Result<DeviationRegistration, ApplicationError>
+    + handle(command: RecordConditionNormalizedCommand): Optional<DeviationAlert>
     + handle(command: AcknowledgeAlertCommand): Result<Long, ApplicationError>
     + handle(command: ResolveAlertCommand): Result<Long, ApplicationError>
     + handle(command: UpdateNotificationPreferenceCommand): Result<NotificationPreference, ApplicationError>
@@ -230,6 +432,7 @@ package "ca.application.queryservices" {
   interface CaQueryService {
     + handle(query: GetAlertsQuery): List<DeviationAlert>
     + handle(query: GetAlertByIdQuery): Optional<DeviationAlert>
+    + handle(query: GetAlertDetailQuery): Optional<DeviationAlertDetail>
     + handle(query: GetComplianceEventsByRelatedEntityIdQuery): List<ComplianceEvent>
     + handle(query: GetNotificationPreferenceByUserIdQuery): Optional<NotificationPreference>
   }
@@ -237,9 +440,30 @@ package "ca.application.queryservices" {
 
 CaCommandService ..> Result
 CaCommandService ..> ApplicationError
+CaCommandService ..> DeviationRegistration
 CaQueryService ..> DeviationAlert
+CaQueryService ..> DeviationAlertDetail
 CaQueryService ..> ComplianceEvent
 CaQueryService ..> NotificationPreference
+
+package "ca.application.commandservices" {
+  interface NotificationCommandService {
+    + handle(command: PublishNotificationCommand): List<Notification>
+    + handle(command: MarkNotificationAsReadCommand): Result<Notification, ApplicationError>
+    + handle(command: MarkAllNotificationsAsReadCommand): int
+    + handle(command: SendAlertEmailNotificationCommand): Result<AlertEmailDelivery, ApplicationError>
+  }
+}
+
+package "ca.application.queryservices" {
+  interface NotificationQueryService {
+    + handle(query: GetNotificationsQuery): List<Notification>
+    + handle(query: GetUnreadNotificationCountQuery): long
+  }
+}
+
+NotificationCommandService ..> AlertEmailDelivery
+NotificationQueryService ..> Notification
 
 package "ca.application.internal.commandservices" {
   class CaCommandServiceImpl
@@ -260,20 +484,73 @@ CaQueryServiceImpl --> DeviationAlertRepository
 CaQueryServiceImpl --> ComplianceEventRepository
 CaQueryServiceImpl --> NotificationPreferenceRepository
 
+package "ca.application.internal.commandservices" {
+  class NotificationCommandServiceImpl
+}
+
+package "ca.application.internal.queryservices" {
+  class NotificationQueryServiceImpl
+}
+
+NotificationCommandServiceImpl ..|> NotificationCommandService
+NotificationCommandServiceImpl --> NotificationRepository
+NotificationCommandServiceImpl --> NotificationPreferenceRepository : preferences of each person
+NotificationCommandServiceImpl --> DeviationAlertRepository
+NotificationCommandServiceImpl --> ComplianceEventRepository : DEVIATION_ALERT_EMAIL_SENT
+NotificationQueryServiceImpl ..|> NotificationQueryService
+NotificationQueryServiceImpl --> NotificationRepository
+
 package "ca.application.internal.outboundservices.acl" {
-  class CaExternalBatchService {
-    + existsBatchById(batchId: Long): boolean
+  class CaExternalEquipmentService {
+    + findSource(laboratoryId, environmentId, deviceId): Optional<AlertSource>
   }
 
-  class CaExternalEquipmentService {
-    + existsEquipmentById(equipmentId: Long): boolean
+  class CaExternalTrackingService {
+    + findActuations(laboratoryId, deviceId, metric, from, to): List<RelatedActuation>
+  }
+
+  class CaExternalIamService {
+    + findRecipients(laboratoryId: Long): List<Recipient>
+  }
+
+  class CaExternalLaboratoryService {
+    + environmentName(laboratoryId, environmentId): String
+  }
+
+  class CaExternalProfileService {
+    + displayNameOf(userId: Long): String
   }
 }
 
-CaCommandServiceImpl --> CaExternalBatchService
-CaCommandServiceImpl --> CaExternalEquipmentService
-CaExternalBatchService --> BatchRepository
-CaExternalEquipmentService --> EquipmentRepository
+package "ca.application.internal.outboundservices.notifications" {
+  interface AlertEmailNotifier {
+    + send(notice: AlertNotice): boolean
+  }
+}
+
+package "ca.application.internal.notifications" {
+  class CriticalAlertEmailScheduler {
+    + schedule(alertId: Long): void
+  }
+}
+
+NotificationCommandServiceImpl --> CaExternalIamService : active accounts of the laboratory
+NotificationCommandServiceImpl --> CaExternalLaboratoryService
+NotificationCommandServiceImpl --> CaExternalEquipmentService
+NotificationCommandServiceImpl --> AlertEmailNotifier
+CaExternalIamService --> IamContextFacade
+CaExternalLaboratoryService --> LaboratoryContextFacade
+CaExternalProfileService --> ProfileContextFacade
+CriticalAlertEmailScheduler --> NotificationCommandService
+note bottom of CriticalAlertEmailScheduler
+  Sends the e-mail of a critical alert on a virtual thread after the
+  transaction that stored the alert commits.
+end note
+
+CaCommandServiceImpl --> CaExternalEquipmentService : device and origin
+CaQueryServiceImpl --> CaExternalTrackingService : related actions
+CaExternalEquipmentService --> EquipmentContextFacade
+CaExternalTrackingService --> TrackingContextFacade
 
 package "ca.application.internal.eventhandlers" {
   class BatchRejectedComplianceEventHandler
@@ -281,31 +558,62 @@ package "ca.application.internal.eventhandlers" {
   class CalibrationExpiredEventHandler
   class DeviationAlertAcknowledgedEventHandler
   class DeviationAlertCreatedEventHandler
+  class DeviationAlertEscalatedEventHandler
   class DeviationAlertResolvedEventHandler
   class NotificationPreferenceUpdatedEventHandler
   class RawMaterialLowStockComplianceEventHandler
-  class TelemetryAnomalyDetectedComplianceEventHandler
+  class EnvironmentalDeviationComplianceEventHandler
+  class EnvironmentalConditionNormalizedComplianceEventHandler
+  class AlertNotificationEventHandler
+  class BatchNotificationEventHandler
 }
+
+AlertNotificationEventHandler ..> DeviationAlertCreatedEvent
+AlertNotificationEventHandler ..> DeviationAlertEscalatedEvent
+AlertNotificationEventHandler ..> DeviationAlertAcknowledgedEvent
+AlertNotificationEventHandler ..> DeviationAlertResolvedEvent
+AlertNotificationEventHandler --> NotificationCommandService
+AlertNotificationEventHandler --> CriticalAlertEmailScheduler : opened or escalated as CRITICAL
+AlertNotificationEventHandler --> CaExternalProfileService
+BatchNotificationEventHandler ..> BatchReleasedIntegrationEvent
+BatchNotificationEventHandler ..> BatchRejectedIntegrationEvent
+BatchNotificationEventHandler --> NotificationCommandService
+BatchNotificationEventHandler --> CaExternalProfileService
 
 BatchRejectedComplianceEventHandler --> ComplianceEventRepository
 BatchReleasedComplianceEventHandler --> ComplianceEventRepository
 RawMaterialLowStockComplianceEventHandler --> ComplianceEventRepository
-CalibrationExpiredEventHandler --> CaCommandService
-TelemetryAnomalyDetectedComplianceEventHandler --> CaCommandService
+CalibrationExpiredEventHandler --> ComplianceEventRepository
+EnvironmentalDeviationComplianceEventHandler --> CaCommandService
+EnvironmentalDeviationComplianceEventHandler ..> EnvironmentalDeviationDetectedIntegrationEvent
+EnvironmentalConditionNormalizedComplianceEventHandler --> CaCommandService
+EnvironmentalConditionNormalizedComplianceEventHandler ..> EnvironmentalConditionNormalizedIntegrationEvent
+note bottom of EnvironmentalDeviationComplianceEventHandler
+  Tracking deviation (WARNING / CRITICAL) of the environmental device or a
+  container monitor -> opens the alert of the incident or is added to it.
+  A return to NORMAL is noted in the open alert, which stays open.
+end note
+note bottom of CalibrationExpiredEventHandler
+  Records EQUIPMENT_CALIBRATION_EXPIRED as compliance evidence;
+  deviation alerts belong to environments and containers.
+end note
 
 DeviationAlertCreatedEventHandler ..> DeviationAlertCreatedEvent
+DeviationAlertEscalatedEventHandler ..> DeviationAlertEscalatedEvent
 DeviationAlertAcknowledgedEventHandler ..> DeviationAlertAcknowledgedEvent
 DeviationAlertResolvedEventHandler ..> DeviationAlertResolvedEvent
 NotificationPreferenceUpdatedEventHandler ..> NotificationPreferenceUpdatedEvent
 
 package "ca.interfaces.events" {
   class DeviationAlertCreatedIntegrationEvent <<record>>
+  class DeviationAlertEscalatedIntegrationEvent <<record>>
   class DeviationAlertAcknowledgedIntegrationEvent <<record>>
   class DeviationAlertResolvedIntegrationEvent <<record>>
   class NotificationPreferenceUpdatedIntegrationEvent <<record>>
 }
 
 DeviationAlertCreatedEventHandler ..> DeviationAlertCreatedIntegrationEvent
+DeviationAlertEscalatedEventHandler ..> DeviationAlertEscalatedIntegrationEvent
 DeviationAlertAcknowledgedEventHandler ..> DeviationAlertAcknowledgedIntegrationEvent
 DeviationAlertResolvedEventHandler ..> DeviationAlertResolvedIntegrationEvent
 NotificationPreferenceUpdatedEventHandler ..> NotificationPreferenceUpdatedIntegrationEvent
@@ -314,16 +622,43 @@ package "ca.interfaces.acl" {
   class ComplianceContextFacade {
     + recordRawMaterialLowStockEvent(rawMaterialId: Long, laboratoryId: Long, materialName: String, currentStock: Integer, minimumThreshold: Integer): void
     + canReleaseBatch(batchId: Long): boolean
+    + findEnvironmentAlerts(laboratoryId, environmentId, from, to): List<AlertReference>
+  }
+  class AlertReference <<record>> {
+    + id: Long
+    + deviceId: Long
+    + origin: String
+    + parameterName: String
+    + severity: String
+    + status: String
+    + deviationCount: Integer
+  }
+  class CaTenantResourceLookup {
+    + types(): alertId
   }
 }
 
 ComplianceContextFacade --> ComplianceEventRepository
+ComplianceContextFacade --> DeviationAlertRepository
+ComplianceContextFacade ..> AlertReference
+note bottom of ComplianceContextFacade
+  findEnvironmentAlerts: incidents of an environment and its containers detected
+  in the period, read by the environmental report of Reporting (US95).
+end note
+CaTenantResourceLookup --> DeviationAlertRepository
+note bottom of CaTenantResourceLookup
+  alertId -> laboratoryId of the alert
+  (equipmentId for alerts without laboratory).
+end note
 
 package "ca.infrastructure.persistence.jpa.entities" {
   class DeviationAlertPersistenceEntity
   class ComplianceEventPersistenceEntity
   class NotificationPreferencePersistenceEntity
+  class NotificationPersistenceEntity
 }
+
+NotificationPersistenceEntity --|> AuditableAbstractPersistenceEntity
 
 DeviationAlertPersistenceEntity --|> AuditableAbstractPersistenceEntity
 ComplianceEventPersistenceEntity --|> AuditableAbstractPersistenceEntity
@@ -333,7 +668,11 @@ package "ca.infrastructure.persistence.jpa.repositories" {
   interface DeviationAlertPersistenceRepository
   interface ComplianceEventPersistenceRepository
   interface NotificationPreferencePersistenceRepository
+  interface NotificationPersistenceRepository
 }
+
+NotificationPersistenceRepository --|> JpaRepository
+NotificationPersistenceRepository --> NotificationPersistenceEntity
 
 DeviationAlertPersistenceRepository --|> JpaRepository
 ComplianceEventPersistenceRepository --|> JpaRepository
@@ -347,7 +686,11 @@ package "ca.infrastructure.persistence.jpa.assemblers" {
   class DeviationAlertPersistenceAssembler
   class ComplianceEventPersistenceAssembler
   class NotificationPreferencePersistenceAssembler
+  class NotificationPersistenceAssembler
 }
+
+NotificationPersistenceAssembler ..> Notification
+NotificationPersistenceAssembler ..> NotificationPersistenceEntity
 
 DeviationAlertPersistenceAssembler ..> DeviationAlert
 DeviationAlertPersistenceAssembler ..> DeviationAlertPersistenceEntity
@@ -360,7 +703,12 @@ package "ca.infrastructure.persistence.jpa.adapters" {
   class DeviationAlertRepositoryImpl
   class ComplianceEventRepositoryImpl
   class NotificationPreferenceRepositoryImpl
+  class NotificationRepositoryImpl
 }
+
+NotificationRepositoryImpl ..|> NotificationRepository
+NotificationRepositoryImpl --> NotificationPersistenceRepository
+NotificationRepositoryImpl --> NotificationPersistenceAssembler
 
 DeviationAlertRepositoryImpl ..|> DeviationAlertRepository
 ComplianceEventRepositoryImpl ..|> ComplianceEventRepository
@@ -377,7 +725,28 @@ package "ca.infrastructure.persistence.jpa.converters" {
   class AlertSeverityPersistenceConverter
   class AlertStatusPersistenceConverter
   class ComplianceEventTypePersistenceConverter
+  class NotificationTypePersistenceConverter
 }
+
+NotificationTypePersistenceConverter ..|> AttributeConverter
+NotificationTypePersistenceConverter ..> NotificationType
+
+package "ca.infrastructure.notifications.email" {
+  class EmailAlertNotifier
+}
+
+package "ca.infrastructure.configuration" {
+  class CaConfiguration {
+    + complianceClock(): Clock
+  }
+}
+
+EmailAlertNotifier ..|> AlertEmailNotifier
+EmailAlertNotifier --> EmailSender
+note bottom of EmailAlertNotifier
+  Spanish and English text with the environment, device, variable, value,
+  limit, detection time (Peru time) and the link to the alert detail.
+end note
 
 AlertSeverityPersistenceConverter ..|> AttributeConverter
 AlertStatusPersistenceConverter ..|> AttributeConverter
@@ -388,32 +757,41 @@ AlertStatusPersistenceConverter ..> AlertStatus
 ComplianceEventTypePersistenceConverter ..> ComplianceEventType
 
 package "ca.interfaces.rest.resources" {
-  class CreateDeviationAlertResource <<record>>
   class DeviationAlertResource <<record>>
-  class AcknowledgeAlertResource <<record>>
+  class DeviationAlertDetailResource <<record>>
+  class RelatedActuationResource <<record>>
+  class CreateDeviationAlertResource <<record>>
   class ResolveAlertResource <<record>>
   class ComplianceEventResource <<record>>
   class NotificationPreferenceResource <<record>>
   class UpdateNotificationPreferenceResource <<record>>
+  class NotificationResource <<record>>
+  class UnreadNotificationsResource <<record>>
+  class NotificationsReadResource <<record>>
+  class AlertEmailNotificationResource <<record>>
 }
 
 package "ca.interfaces.rest.transform" {
-  class CreateDeviationAlertCommandFromResourceAssembler
   class DeviationAlertResourceFromEntityAssembler
-  class AcknowledgeAlertCommandFromResourceAssembler
+  class CreateDeviationAlertCommandFromResourceAssembler
   class ResolveAlertCommandFromResourceAssembler
   class ComplianceEventResourceFromEntityAssembler
   class NotificationPreferenceResourceFromEntityAssembler
   class UpdateNotificationPreferenceCommandFromResourceAssembler
+  class NotificationResourceFromEntityAssembler
 }
+
+NotificationResourceFromEntityAssembler ..> Notification
+NotificationResourceFromEntityAssembler ..> NotificationResource
+
+DeviationAlertResourceFromEntityAssembler ..> DeviationAlert
+DeviationAlertResourceFromEntityAssembler ..> DeviationAlertDetail
+DeviationAlertResourceFromEntityAssembler ..> DeviationAlertResource
+DeviationAlertResourceFromEntityAssembler ..> DeviationAlertDetailResource
+DeviationAlertDetailResource --> "0..*" RelatedActuationResource
 
 CreateDeviationAlertCommandFromResourceAssembler ..> CreateDeviationAlertResource
 CreateDeviationAlertCommandFromResourceAssembler ..> CreateDeviationAlertCommand
-DeviationAlertResourceFromEntityAssembler ..> DeviationAlert
-DeviationAlertResourceFromEntityAssembler ..> DeviationAlertResource
-
-AcknowledgeAlertCommandFromResourceAssembler ..> AcknowledgeAlertResource
-AcknowledgeAlertCommandFromResourceAssembler ..> AcknowledgeAlertCommand
 ResolveAlertCommandFromResourceAssembler ..> ResolveAlertResource
 ResolveAlertCommandFromResourceAssembler ..> ResolveAlertCommand
 
@@ -428,23 +806,62 @@ package "ca.interfaces.rest" {
   class DeviationAlertController
   class ComplianceEventController
   class NotificationPreferenceController
+  class NotificationController
 }
+
+NotificationController --> NotificationCommandService
+NotificationController --> NotificationQueryService
+NotificationController ..> CurrentUser
+NotificationController ..> NotificationResourceFromEntityAssembler
+NotificationController ..> UnreadNotificationsResource
+NotificationController ..> NotificationsReadResource
+DeviationAlertController --> NotificationCommandService : e-mail notice (TS78)
+DeviationAlertController ..> AlertEmailNotificationResource
+note bottom of NotificationController
+  GET  /api/v1/users/me/notifications?unread&limit        (US83)
+  GET  /api/v1/users/me/notifications/unread-count
+  POST /api/v1/users/me/notifications/{notificationId}/read-receipts (201 / 404)
+  POST /api/v1/users/me/notifications/read-receipts                  (201)
+end note
 
 DeviationAlertController --> CaCommandService
 DeviationAlertController --> CaQueryService
 DeviationAlertController ..> ResponseEntityAssembler
-DeviationAlertController ..> CreateDeviationAlertCommandFromResourceAssembler
 DeviationAlertController ..> DeviationAlertResourceFromEntityAssembler
-DeviationAlertController ..> AcknowledgeAlertCommandFromResourceAssembler
+DeviationAlertController ..> CreateDeviationAlertCommandFromResourceAssembler
+DeviationAlertController ..> AcknowledgeAlertCommand
+DeviationAlertController ..> CurrentUser
 DeviationAlertController ..> ResolveAlertCommandFromResourceAssembler
 
 ComplianceEventController --> CaQueryService
 ComplianceEventController ..> ComplianceEventResourceFromEntityAssembler
+
+note bottom of DeviationAlertController
+  GET  /api/v1/laboratories/{laboratoryId}/environments/{environmentId}/deviation-alerts
+       ?status&severity&deviceId&active                  (US85, TS74)
+  POST /api/v1/laboratories/{laboratoryId}/environments/{environmentId}/deviation-alerts
+       (TS73: 201 + Location new alert, 200 joined the open alert, 400)
+  GET  /api/v1/deviation-alerts/{alertId}                 (US86, with related actions)
+  POST /api/v1/deviation-alerts/{alertId}/acknowledgements  (US87, TS75, 201 / 409)
+  POST /api/v1/deviation-alerts/{alertId}/resolutions       (US88, TS76, 201 / 409)
+  POST /api/v1/deviation-alerts/{alertId}/email-notifications (US84, TS78, 201 / 409 / 502)
+  The authenticated user is the actor (CurrentUser); auditors only read.
+end note
+note bottom of ComplianceEventController
+  GET /api/v1/laboratories/{laboratoryId}/equipments/{equipmentId}/compliance-events
+  GET /api/v1/batches/{batchId}/compliance-events
+end note
 
 NotificationPreferenceController --> CaCommandService
 NotificationPreferenceController --> CaQueryService
 NotificationPreferenceController ..> NotificationPreferenceResourceFromEntityAssembler
 NotificationPreferenceController ..> UpdateNotificationPreferenceCommandFromResourceAssembler
 NotificationPreferenceController ..> ResponseEntityAssembler
+NotificationPreferenceController ..> CurrentUser
+note bottom of NotificationPreferenceController
+  GET /api/v1/users/me/notification-preferences
+  PUT /api/v1/users/me/notification-preferences
+  (bell, e-mail of critical alerts, minimum alert severity)
+end note
 
 @enduml

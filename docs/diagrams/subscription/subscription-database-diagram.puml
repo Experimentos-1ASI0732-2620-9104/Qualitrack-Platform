@@ -42,6 +42,7 @@ entity "subscriptions" as subscriptions {
   current_period_end : VARCHAR(50)
   cancelled_at : VARCHAR(50)
   cancelled_by : BIGINT
+  * cancel_at_period_end : BOOLEAN DEFAULT FALSE
   --
   <<UK>> stripe_subscription_id
   <<UK>> stripe_checkout_session_id

@@ -1,27 +1,50 @@
 @startuml batch-database-diagram
 
-title QualiTrack - Batch Backend Database Diagram
+title QualiTrack - Product Batch Management Database Diagram
 
 hide stereotypes
 
 skinparam linetype ortho
 skinparam shadowing false
 
+entity "pharmaceutical_products" as pharmaceutical_products {
+  * <u>id</u> : BIGINT PK AUTO_INCREMENT
+  --
+  laboratory_id : BIGINT NOT NULL
+  environment_id : BIGINT NULL
+  code : VARCHAR(50) NOT NULL
+  name : VARCHAR(150) NOT NULL
+  description : VARCHAR(500)
+  specifications : VARCHAR(1000) NOT NULL
+  active : BOOLEAN NOT NULL
+  created_at : DATETIME(6) NOT NULL
+  updated_at : DATETIME(6) NOT NULL
+  --
+  UNIQUE uk_pharmaceutical_products_laboratory_code (laboratory_id, code)
+}
+
 entity "batches" as batches {
   * <u>id</u> : BIGINT PK AUTO_INCREMENT
   --
-  laboratory_id : BIGINT FK NOT NULL
-  product_id : BIGINT FK NOT NULL
+  laboratory_id : BIGINT NOT NULL
+  environment_id : BIGINT NULL
+  product_id : BIGINT NOT NULL
   product_name : VARCHAR(150) NOT NULL
-  batch_number : VARCHAR(50) NOT NULL UNIQUE
+  batch_number : VARCHAR(50) NOT NULL
   quantity : DOUBLE NOT NULL
   unit : VARCHAR(20) NOT NULL
   status : VARCHAR(50) NOT NULL
   start_date : VARCHAR(30) NOT NULL
   end_date : VARCHAR(30)
   notes : VARCHAR(500)
+  container_monitor_id : BIGINT NULL
+  container_environment_id : BIGINT NULL
+  container_assigned_by : BIGINT NULL
+  container_assigned_at : DATETIME(6) NULL
   created_at : DATETIME(6) NOT NULL
   updated_at : DATETIME(6) NOT NULL
+  --
+  UNIQUE uk_batches_laboratory_batch_number (laboratory_id, batch_number)
 }
 
 entity "raw_material_usages" as raw_material_usages {
@@ -36,15 +59,45 @@ entity "raw_material_usages" as raw_material_usages {
   usage_date : VARCHAR(30) NOT NULL
   stock_before : DECIMAL(19,3) NULL
   stock_after : DECIMAL(19,3) NULL
+  operation_id : VARCHAR(100) NULL
   created_at : DATETIME(6) NOT NULL
   updated_at : DATETIME(6) NOT NULL
+}
+
+entity "batch_equipment_usages" as batch_equipment_usages {
+  * <u>id</u> : BIGINT PK AUTO_INCREMENT
+  --
+  batch_id : BIGINT NOT NULL
+  equipment_id : BIGINT NOT NULL
+  equipment_name : VARCHAR(150) NOT NULL
+  registered_by_user_id : BIGINT NULL
+  registered_at : VARCHAR(30) NOT NULL
+  created_at : DATETIME(6) NOT NULL
+  updated_at : DATETIME(6) NOT NULL
+  --
+  UNIQUE (batch_id, equipment_id)
+}
+
+entity "batch_staff_participations" as batch_staff_participations {
+  * <u>id</u> : BIGINT PK AUTO_INCREMENT
+  --
+  batch_id : BIGINT NOT NULL
+  staff_id : BIGINT NOT NULL
+  staff_name : VARCHAR(150) NOT NULL
+  staff_role : VARCHAR(100) NULL
+  registered_by_user_id : BIGINT NULL
+  registered_at : VARCHAR(30) NOT NULL
+  created_at : DATETIME(6) NOT NULL
+  updated_at : DATETIME(6) NOT NULL
+  --
+  UNIQUE (batch_id, staff_id)
 }
 
 entity "digital_signatures" as digital_signatures {
   * <u>id</u> : BIGINT PK AUTO_INCREMENT
   --
-  batch_id : BIGINT FK NOT NULL
-  signed_by_user_id : BIGINT FK NOT NULL
+  batch_id : BIGINT NOT NULL
+  signed_by_user_id : BIGINT NOT NULL
   signature_hash : VARCHAR(255) NOT NULL
   signed_at : VARCHAR(30) NOT NULL
   created_at : DATETIME(6) NOT NULL
@@ -54,30 +107,53 @@ entity "digital_signatures" as digital_signatures {
 entity "rejection_records" as rejection_records {
   * <u>id</u> : BIGINT PK AUTO_INCREMENT
   --
-  batch_id : BIGINT FK NOT NULL
+  batch_id : BIGINT NOT NULL
   rejection_date : VARCHAR(30) NOT NULL
   reason : VARCHAR(500) NOT NULL
   created_at : DATETIME(6) NOT NULL
   updated_at : DATETIME(6) NOT NULL
 }
 
+pharmaceutical_products ||..o{ batches : "product_id"
 batches ||..o{ raw_material_usages : "uses"
-batches ||--o{ digital_signatures : "signs"
-batches ||--o{ rejection_records : "rejects"
+batches ||..o{ batch_equipment_usages : "equipment"
+batches ||..o{ batch_staff_participations : "staff"
+batches ||..o| digital_signatures : "release"
+batches ||..o| rejection_records : "rejection"
 
-package "Inventory Context (reference)" {
+package "Other contexts (reference)" {
+  entity "environments" as environments {
+    * id : BIGINT PK
+    laboratory_id : BIGINT
+  }
   entity "inventory_receipts" as inventory_receipts {
     * id : BIGINT PK
     material_id : BIGINT
-    laboratory_id : BIGINT
     available_amount : DECIMAL(19,3)
   }
+  entity "equipment" as equipment {
+    * id : BIGINT PK
+    environment_id : BIGINT
+    device_type : VARCHAR
+    status : VARCHAR
+  }
+  entity "staff_members" as staff_members {
+    * id : BIGINT PK
+  }
 }
+
+environments |o..o{ pharmaceutical_products : environment_id
+environments |o..o{ batches : environment_id
+equipment |o..o{ batches : container_monitor_id
+environments |o..o{ batches : container_environment_id
 inventory_receipts |o..o{ raw_material_usages : inventory_receipt_id
+equipment ||..o{ batch_equipment_usages : equipment_id
+staff_members ||..o{ batch_staff_participations : staff_id
+
 note bottom of raw_material_usages
-  Receipt ID is NULL for legacy records.
-  With a receipt, raw_material_id references inventory_materials;
-  otherwise it identifies the legacy Laboratory raw_materials.
+  Receipt ID is NULL for usages recorded before Inventory;
+  then raw_material_id identifies a legacy Laboratory raw material.
+  operation_id is the idempotency key of the Inventory consumption.
   Dotted links are logical scalar IDs, not JPA foreign keys.
 end note
 @enduml

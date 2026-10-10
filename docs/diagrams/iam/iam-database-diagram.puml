@@ -11,9 +11,11 @@ entity "iam_users" {
   created_at : DATETIME NOT NULL
   updated_at : DATETIME NOT NULL
   username : VARCHAR(80) NOT NULL UNIQUE
+  email : VARCHAR(120) UNIQUE
   password : VARCHAR(255) NOT NULL
   laboratory_id : BIGINT
   status : VARCHAR(50) NOT NULL
+  password_change_required : BOOLEAN NOT NULL
 }
 
 entity "iam_roles" {
@@ -29,7 +31,22 @@ entity "iam_user_roles" {
   * role_id : BIGINT FK
 }
 
+entity "iam_password_recoveries" {
+  * id : BIGINT PK
+  --
+  created_at : DATETIME NOT NULL
+  updated_at : DATETIME NOT NULL
+  user_id : BIGINT NOT NULL
+  code_hash : VARCHAR(255) NOT NULL
+  requested_at : DATETIME NOT NULL
+  expires_at : DATETIME NOT NULL
+  failed_attempts : INT NOT NULL
+  status : VARCHAR(20) NOT NULL
+  completed_at : DATETIME
+}
+
 iam_users ||--o{ iam_user_roles : user_id
+iam_users ||--o{ iam_password_recoveries : user_id
 iam_roles ||--o{ iam_user_roles : role_id
 
 @enduml

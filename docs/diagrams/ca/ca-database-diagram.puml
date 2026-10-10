@@ -10,8 +10,13 @@ entity "deviation_alerts" {
   --
   created_at : DATETIME NOT NULL
   updated_at : DATETIME NOT NULL
+  laboratory_id : BIGINT
+  environment_id : BIGINT
+  origin : VARCHAR(20)
   equipment_id : BIGINT NOT NULL
   batch_id : BIGINT
+  measurement_id : BIGINT
+  last_measurement_id : BIGINT
   parameter_name : VARCHAR(100) NOT NULL
   recorded_value : DOUBLE NOT NULL
   threshold_value : DOUBLE NOT NULL
@@ -19,10 +24,22 @@ entity "deviation_alerts" {
   timestamp : VARCHAR(30) NOT NULL
   severity : VARCHAR(50) NOT NULL
   status : VARCHAR(50) NOT NULL
+  deviation_count : INT
+  last_detected_at : DATETIME(6)
+  normalized_at : DATETIME(6)
   acknowledged_by : BIGINT
+  acknowledged_at : DATETIME(6)
   resolved_by : BIGINT
+  resolved_at : DATETIME(6)
   resolution_notes : VARCHAR(500)
 }
+
+note right of "deviation_alerts"
+  One row per incident of an environment (origin ENVIRONMENT, environmental device)
+  or a container (origin CONTAINER, container monitor): equipment_id is the device,
+  measurement_id / last_measurement_id reference Tracking measurements.
+  deviation_count grows while the alert is open; normalized_at notes the return to normal.
+end note
 
 entity "compliance_events" {
   * id : BIGINT PK
@@ -43,9 +60,36 @@ entity "notification_preferences" {
   updated_at : DATETIME NOT NULL
   user_id : BIGINT NOT NULL UNIQUE
   email_enabled : BOOLEAN NOT NULL
-  sms_enabled : BOOLEAN NOT NULL
   in_app_enabled : BOOLEAN NOT NULL
   minimum_severity : VARCHAR(50) NOT NULL
 }
+
+entity "notifications" {
+  * id : BIGINT PK
+  --
+  created_at : DATETIME NOT NULL
+  updated_at : DATETIME NOT NULL
+  recipient_user_id : BIGINT NOT NULL
+  laboratory_id : BIGINT NOT NULL
+  type : VARCHAR(40) NOT NULL
+  severity : VARCHAR(20)
+  subject_id : BIGINT NOT NULL
+  environment_name : VARCHAR(120)
+  subject_name : VARCHAR(150)
+  parameter_name : VARCHAR(60)
+  recorded_value : DOUBLE
+  unit : VARCHAR(20)
+  actor_name : VARCHAR(150)
+  note : VARCHAR(500)
+  occurred_at : DATETIME(6) NOT NULL
+  read_at : DATETIME(6)
+  --
+  INDEX idx_notifications_recipient (recipient_user_id, occurred_at)
+}
+
+note right of "notifications"
+  One row per person: subject_id is the alert (ALERT_*) or the batch (BATCH_*).
+  read_at stays empty until the person reads it in the bell.
+end note
 
 @enduml

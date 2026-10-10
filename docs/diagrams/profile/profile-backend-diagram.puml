@@ -1,0 +1,370 @@
+@startuml profile-backend-diagram
+
+title QualiTrack - Profile Backend Class Diagram
+
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+package "shared" <<External>> {
+  abstract class AbstractDomainAggregateRoot
+  abstract class AuditableAbstractPersistenceEntity
+  class ApplicationError
+  class Result
+  class ResponseEntityAssembler
+  class ErrorResponseAssembler
+  interface CurrentUser
+}
+
+package "spring" <<External>> {
+  class ApplicationEventPublisher
+  interface JpaRepository
+}
+
+package "iam.interfaces.acl" <<External>> {
+  class IamContextFacade {
+    + findAccount(userId: Long): Optional<AccountReference>
+  }
+}
+
+package "laboratory.interfaces.acl" <<External>> {
+  interface LaboratoryContextFacade {
+    + findStaffMember(laboratoryId, staffId): Optional<StaffReference>
+    + findStaffMemberByAccount(userId: Long): Optional<StaffReference>
+  }
+}
+
+package "profile.domain.model.valueobjects" {
+  class PersonName <<record>> {
+    + value: String
+    + {static} tryParse(value: String): Optional<PersonName>
+  }
+
+  class Dni <<record>> {
+    + value: String
+  }
+
+  class PhoneNumber <<record>> {
+    + value: String
+  }
+
+  class Location <<record>> {
+    + value: String
+  }
+
+  class PhotoImage <<record>> {
+    + content: byte[]
+    + contentType: String
+    + {static} MAX_SIZE_BYTES: int
+    + {static} of(content: byte[]): PhotoImage
+    + size(): int
+  }
+
+  class ProfilePhoto <<record>> {
+    + contentType: String
+    + sizeBytes: int
+    + updatedAt: Instant
+    + {static} of(image: PhotoImage, uploadedAt: Instant): ProfilePhoto
+  }
+
+  class ProfileDetail <<record>> {
+    + profile: Profile
+    + username: String
+    + email: String
+    + roles: List<String>
+    + staffId: Long
+    + position: String
+  }
+}
+
+note bottom of PhotoImage
+  JPEG, PNG or WebP detected from the content
+  (magic bytes), at most 2 MB.
+end note
+
+package "profile.domain.model.aggregates" {
+  class Profile {
+    - id: Long
+    - userId: Long
+    - fullName: PersonName
+    - dni: Dni
+    - phoneNumber: PhoneNumber
+    - location: Location
+    - photo: ProfilePhoto
+    - updatedAt: Instant
+    + update(fullName, dni, phoneNumber, location): boolean
+    + changePhoto(image: PhotoImage, uploadedAt: Instant): void
+    + removePhoto(): boolean
+    + hasPhoto(): boolean
+    + isStored(): boolean
+    + getFullNameValue(): String
+  }
+}
+
+Profile --|> AbstractDomainAggregateRoot
+Profile --> PersonName
+Profile --> Dni
+Profile --> PhoneNumber
+Profile --> Location
+Profile --> ProfilePhoto
+ProfilePhoto ..> PhotoImage
+ProfileDetail --> Profile
+note right of Profile
+  One profile per IAM account, created the first time it is saved.
+  A profile never saved starts with the name the quality manager
+  registered for a staff member. Laboratory keeps the staff record;
+  Profile keeps the personal data (DNI, location, photo).
+end note
+
+package "profile.domain.model.commands" {
+  class UpdateProfileCommand <<record>> {
+    + userId: Long
+    + fullName: PersonName
+    + dni: Dni
+    + phoneNumber: PhoneNumber
+    + location: Location
+    + {static} of(userId, fullName, dni, phoneNumber, location): UpdateProfileCommand
+  }
+
+  class ChangeProfilePhotoCommand <<record>> {
+    + userId: Long
+    + image: PhotoImage
+  }
+
+  class RemoveProfilePhotoCommand <<record>> {
+    + userId: Long
+  }
+}
+
+package "profile.domain.model.queries" {
+  class GetProfileByUserIdQuery <<record>> {
+    + userId: Long
+  }
+
+  class GetProfilePhotoQuery <<record>> {
+    + userId: Long
+  }
+
+  class GetStaffProfileQuery <<record>> {
+    + laboratoryId: Long
+    + staffId: Long
+  }
+
+  class GetStaffProfilePhotoQuery <<record>> {
+    + laboratoryId: Long
+    + staffId: Long
+  }
+}
+
+package "profile.domain.model.events" {
+  class ProfileUpdatedEvent <<record>> {
+    + userId: Long
+    + fullName: String
+  }
+}
+
+package "profile.domain.repositories" {
+  interface ProfileRepository {
+    + findByUserId(userId: Long): Optional<Profile>
+    + save(profile: Profile): Profile
+  }
+}
+
+ProfileRepository --> Profile
+
+package "profile.application.commandservices" {
+  interface ProfileCommandService {
+    + handle(command: UpdateProfileCommand): Result<Profile, ApplicationError>
+    + handle(command: ChangeProfilePhotoCommand): Result<Profile, ApplicationError>
+    + handle(command: RemoveProfilePhotoCommand): Result<Profile, ApplicationError>
+  }
+}
+
+package "profile.application.queryservices" {
+  interface ProfileQueryService {
+    + handle(query: GetProfileByUserIdQuery): Optional<ProfileDetail>
+    + handle(query: GetProfilePhotoQuery): Optional<PhotoImage>
+    + handle(query: GetStaffProfileQuery): Optional<ProfileDetail>
+    + handle(query: GetStaffProfilePhotoQuery): Optional<PhotoImage>
+  }
+}
+
+ProfileCommandService ..> Result
+ProfileCommandService ..> ApplicationError
+ProfileQueryService ..> ProfileDetail
+
+package "profile.application.internal.outboundservices.acl" {
+  class ExternalIamService {
+    + findAccount(userId: Long): Optional<Account>
+  }
+
+  class ExternalLaboratoryService {
+    + findStaffMemberByAccount(userId: Long): Optional<StaffMember>
+    + findStaffMember(laboratoryId, staffId): Optional<StaffMember>
+  }
+}
+
+package "profile.application.internal.outboundservices.storage" {
+  interface ProfilePhotoStorage {
+    + store(profileId: Long, image: PhotoImage): void
+    + find(profileId: Long): Optional<PhotoImage>
+    + remove(profileId: Long): void
+  }
+}
+
+ExternalIamService --> IamContextFacade
+ExternalLaboratoryService --> LaboratoryContextFacade
+
+package "profile.application.internal.commandservices" {
+  class ProfileCommandServiceImpl
+}
+
+package "profile.application.internal.queryservices" {
+  class ProfileQueryServiceImpl
+}
+
+package "profile.application.internal.eventhandlers" {
+  class ProfileUpdatedEventHandler
+}
+
+ProfileCommandServiceImpl ..|> ProfileCommandService
+ProfileCommandServiceImpl --> ProfileRepository
+ProfileCommandServiceImpl --> ProfilePhotoStorage
+ProfileCommandServiceImpl --> ExternalIamService
+ProfileCommandServiceImpl --> ExternalLaboratoryService : registered name
+ProfileCommandServiceImpl --> ApplicationEventPublisher
+ProfileCommandServiceImpl ..> ProfileUpdatedEvent : full name changed
+ProfileQueryServiceImpl ..|> ProfileQueryService
+ProfileQueryServiceImpl --> ProfileRepository
+ProfileQueryServiceImpl --> ProfilePhotoStorage
+ProfileQueryServiceImpl --> ExternalIamService : username, e-mail, roles
+ProfileQueryServiceImpl --> ExternalLaboratoryService : staff record and position
+ProfileUpdatedEventHandler ..> ProfileUpdatedEvent
+
+package "profile.interfaces.events" {
+  class ProfileUpdatedIntegrationEvent <<record>> {
+    + userId: Long
+    + fullName: String
+  }
+}
+
+ProfileUpdatedEventHandler ..> ProfileUpdatedIntegrationEvent
+note bottom of ProfileUpdatedIntegrationEvent
+  Laboratory renames the staff member
+  of the account (staff list).
+end note
+
+package "profile.interfaces.acl" {
+  class ProfileContextFacade {
+    + displayNameOf(userId: Long): String
+  }
+}
+
+ProfileContextFacade --> ProfileQueryService
+note bottom of ProfileContextFacade
+  Full name, or the username until the profile is completed:
+  Compliance uses it in the notifications ("acknowledged by ...").
+end note
+
+package "profile.infrastructure.persistence.jpa.entities" {
+  class ProfilePersistenceEntity
+  class ProfilePhotoPersistenceEntity
+}
+
+ProfilePersistenceEntity --|> AuditableAbstractPersistenceEntity
+ProfilePhotoPersistenceEntity --|> AuditableAbstractPersistenceEntity
+
+package "profile.infrastructure.persistence.jpa.repositories" {
+  interface ProfilePersistenceRepository {
+    + findByUserId(userId: Long): Optional<ProfilePersistenceEntity>
+  }
+  interface ProfilePhotoPersistenceRepository {
+    + findByProfileId(profileId: Long): Optional<ProfilePhotoPersistenceEntity>
+    + deleteByProfileId(profileId: Long): void
+  }
+}
+
+ProfilePersistenceRepository --|> JpaRepository
+ProfilePhotoPersistenceRepository --|> JpaRepository
+ProfilePersistenceRepository --> ProfilePersistenceEntity
+ProfilePhotoPersistenceRepository --> ProfilePhotoPersistenceEntity
+
+package "profile.infrastructure.persistence.jpa.assemblers" {
+  class ProfilePersistenceAssembler
+}
+
+ProfilePersistenceAssembler ..> Profile
+ProfilePersistenceAssembler ..> ProfilePersistenceEntity
+
+package "profile.infrastructure.persistence.jpa.adapters" {
+  class ProfileRepositoryImpl
+}
+
+ProfileRepositoryImpl ..|> ProfileRepository
+ProfileRepositoryImpl --> ProfilePersistenceRepository
+ProfileRepositoryImpl --> ProfilePersistenceAssembler
+
+package "profile.infrastructure.storage.database" {
+  class DatabaseProfilePhotoStorage
+}
+
+DatabaseProfilePhotoStorage ..|> ProfilePhotoStorage
+DatabaseProfilePhotoStorage --> ProfilePhotoPersistenceRepository
+note bottom of DatabaseProfilePhotoStorage
+  The image is kept in the database (decision of 2026-10-04):
+  no extra service and it survives redeploys without a disk.
+end note
+
+package "profile.infrastructure.configuration" {
+  class ProfileConfiguration {
+    + profileClock(): Clock
+  }
+}
+
+package "profile.interfaces.rest.resources" {
+  class ProfileResource <<record>>
+  class UpdateProfileResource <<record>>
+}
+
+package "profile.interfaces.rest.transform" {
+  class ProfileResourceFromEntityAssembler {
+    + {static} toResourceFromDetail(detail: ProfileDetail): ProfileResource
+  }
+}
+
+ProfileResourceFromEntityAssembler ..> ProfileDetail
+ProfileResourceFromEntityAssembler ..> ProfileResource
+
+package "profile.interfaces.rest" {
+  class ProfileController
+  class StaffProfileController
+  class ProfilePhotoResponses
+}
+
+ProfileController --> ProfileCommandService
+ProfileController --> ProfileQueryService
+ProfileController ..> CurrentUser
+ProfileController ..> UpdateProfileResource
+ProfileController ..> ProfileResourceFromEntityAssembler
+ProfileController ..> ProfilePhotoResponses
+ProfileController ..> ResponseEntityAssembler
+StaffProfileController --> ProfileQueryService
+StaffProfileController ..> ProfileResourceFromEntityAssembler
+StaffProfileController ..> ProfilePhotoResponses
+ProfilePhotoResponses ..> ErrorResponseAssembler
+
+note bottom of ProfileController
+  GET    /api/v1/users/me/profile
+  PUT    /api/v1/users/me/profile          (full name, DNI, phone, location)
+  GET    /api/v1/users/me/profile/photo
+  PUT    /api/v1/users/me/profile/photo    (image body: 200 / 400 / 413 / 415)
+  DELETE /api/v1/users/me/profile/photo    (204)
+end note
+note bottom of StaffProfileController
+  GET /api/v1/laboratories/{laboratoryId}/staff/{staffId}/profile
+  GET /api/v1/laboratories/{laboratoryId}/staff/{staffId}/profile/photo
+  Only the quality manager of the laboratory (decision of 2026-10-04).
+end note
+
+@enduml
