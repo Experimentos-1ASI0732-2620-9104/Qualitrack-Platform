@@ -20,7 +20,8 @@ public class AuthenticatedUserResourceFromEntityAssembler {
                 user.getRoles().stream()
                         .map(role -> role.getName().name())
                         .toList(),
-                user.getLaboratoryId()
+                user.getLaboratoryId(),
+                user.isPasswordChangeRequired()
         );
     }
 }
