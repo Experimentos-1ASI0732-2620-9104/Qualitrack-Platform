@@ -98,6 +98,7 @@ public class StripeWebhookService {
             case "incomplete_expired" -> SubscriptionStatus.EXPIRED;
             default -> SubscriptionStatus.INACTIVE;
         });
+        subscription.synchronizeRenewal(details.cancelAtPeriodEnd(), OffsetDateTime.now().toString());
         subscriptions.save(subscription);
     }
 
