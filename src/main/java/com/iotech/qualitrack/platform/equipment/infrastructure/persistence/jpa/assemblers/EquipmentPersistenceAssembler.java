@@ -23,12 +23,15 @@ public final class EquipmentPersistenceAssembler {
         return new Equipment(
                 entity.getId(),
                 entity.getLabId(),
+                entity.getEnvironmentId(),
                 entity.getName(),
                 new EquipmentType(entity.getType()),
                 entity.getModel(),
                 entity.getSerialNumber(),
                 entity.getStatus(),
-                deviceId
+                deviceId,
+                entity.getDeviceType(),
+                entity.getFirmwareVersion()
         );
     }
 
@@ -42,6 +45,7 @@ public final class EquipmentPersistenceAssembler {
         }
 
         entity.setLabId(equipment.getLabId());
+        entity.setEnvironmentId(equipment.getEnvironmentId());
         entity.setName(equipment.getName());
 
         entity.setType(equipment.getType().name());
@@ -53,6 +57,8 @@ public final class EquipmentPersistenceAssembler {
         if (equipment.getSensorExternalId() != null) {
             entity.setSensorExternalId(equipment.getSensorExternalId().value());
         }
+        entity.setDeviceType(equipment.getDeviceType());
+        entity.setFirmwareVersion(equipment.getFirmwareVersion());
 
         return entity;
     }
