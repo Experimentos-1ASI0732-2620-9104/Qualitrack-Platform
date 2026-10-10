@@ -2,7 +2,9 @@ package com.iotech.qualitrack.platform.ra.application.internal.eventhandlers;
 
 import com.iotech.qualitrack.platform.equipment.interfaces.events.BpmParameterConfiguredIntegrationEvent;
 import com.iotech.qualitrack.platform.equipment.interfaces.events.CalibrationExpiredIntegrationEvent;
+import com.iotech.qualitrack.platform.equipment.interfaces.events.EquipmentAssignedToEnvironmentIntegrationEvent;
 import com.iotech.qualitrack.platform.equipment.interfaces.events.EquipmentRegisteredIntegrationEvent;
+import com.iotech.qualitrack.platform.equipment.interfaces.events.EquipmentStatusChangedIntegrationEvent;
 import com.iotech.qualitrack.platform.equipment.interfaces.events.MaintenanceRegisteredIntegrationEvent;
 import com.iotech.qualitrack.platform.equipment.interfaces.events.SensorLinkedIntegrationEvent;
 import com.iotech.qualitrack.platform.ra.domain.model.valueobjects.AuditAction;
@@ -89,6 +91,40 @@ public class EquipmentAuditEventHandler {
                 "EQUIPMENT",
                 event.equipmentId(),
                 currentUser.userId(),
+                event.toString()
+        );
+    }
+
+    /**
+     * Records in the audit trail that an equipment or IoT device was located in an environment.
+     *
+     * @param event the equipment location integration event
+     */
+    @EventListener(EquipmentAssignedToEnvironmentIntegrationEvent.class)
+    public void on(EquipmentAssignedToEnvironmentIntegrationEvent event) {
+        log.info("RA received equipment located event: {}", event);
+        raContextFacade.recordAuditLog(
+                AuditAction.UPDATE,
+                "EQUIPMENT",
+                event.equipmentId(),
+                currentUser.userId(),
+                event.toString()
+        );
+    }
+
+    /**
+     * Records in the audit trail a change in the operational status of an equipment.
+     *
+     * @param event the status change integration event
+     */
+    @EventListener(EquipmentStatusChangedIntegrationEvent.class)
+    public void on(EquipmentStatusChangedIntegrationEvent event) {
+        log.info("RA received equipment status changed event: {}", event);
+        raContextFacade.recordAuditLog(
+                AuditAction.UPDATE,
+                "EQUIPMENT",
+                event.equipmentId(),
+                event.changedByUserId(),
                 event.toString()
         );
     }
