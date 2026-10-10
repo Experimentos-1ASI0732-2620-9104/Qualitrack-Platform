@@ -16,18 +16,21 @@ public final class GenerateComplianceReportCommandFromResourceAssembler {
      *
      * @param laboratoryId the laboratory numeric identifier from the request path
      * @param resource the compliance report request resource
+     * @param requestedBy the authenticated user
      * @return the compliance report generation command
      */
     public static GenerateComplianceReportCommand toCommandFromResource(
             Long laboratoryId,
-            GenerateComplianceReportResource resource
+            GenerateComplianceReportResource resource,
+            Long requestedBy
     ) {
         return new GenerateComplianceReportCommand(
                 laboratoryId,
+                resource.environmentId(),
                 resource.startDate(),
                 resource.endDate(),
                 resource.format(),
-                resource.requestedBy()
+                requestedBy
         );
     }
 }
