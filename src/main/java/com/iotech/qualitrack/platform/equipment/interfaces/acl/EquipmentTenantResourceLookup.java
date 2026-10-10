@@ -10,7 +10,7 @@ import java.util.Set;
 public class EquipmentTenantResourceLookup implements TenantResourceLookup {
     private final EquipmentRepository equipment;
     public EquipmentTenantResourceLookup(EquipmentRepository equipment) { this.equipment = equipment; }
-    public Set<String> types() { return Set.of("equipmentId"); }
+    public Set<String> types() { return Set.of("equipmentId", "deviceId"); }
     public Optional<ResourceOwner> owner(String type, Long id) {
         return equipment.findById(id).map(item -> new ResourceOwner("laboratoryId", item.getLabId()));
     }
