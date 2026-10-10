@@ -1,5 +1,7 @@
 package com.iotech.qualitrack.platform.inventory.application.internal.commandservices;
 
+import com.iotech.qualitrack.platform.inventory.application.internal.outboundservices.acl.InventoryExternalLaboratoryService;
+import com.iotech.qualitrack.platform.inventory.domain.model.commands.ImportLegacyRawMaterialCommand;
 import com.iotech.qualitrack.platform.inventory.application.commandservices.InventoryImportService;
 
 import com.iotech.qualitrack.platform.inventory.domain.model.aggregates.*;
@@ -20,19 +22,26 @@ public class InventoryImportServiceImpl implements InventoryImportService {
     private final LegacyInventoryFacade legacy;
     private final InventoryMovementRecorder recorder;
     private final Clock clock;
-    public InventoryImportServiceImpl(InventoryRepository repository, LegacyInventoryFacade legacy, InventoryMovementRecorder recorder, Clock inventoryClock) {
+    private final InventoryExternalLaboratoryService laboratories;
+    public InventoryImportServiceImpl(InventoryRepository repository, LegacyInventoryFacade legacy, InventoryMovementRecorder recorder,
+            Clock inventoryClock, InventoryExternalLaboratoryService laboratories) {
         this.repository = repository;
+        this.laboratories = laboratories;
         this.legacy = legacy;
         this.recorder = recorder;
         this.clock = inventoryClock;
     }
 
-    public Long importMaterial(Long lab, Long legacyId) {
+    public Long handle(ImportLegacyRawMaterialCommand command) {
+        var lab = command.laboratoryId();
+        var legacyId = command.legacyId();
+        if (!laboratories.existsEnvironment(lab, command.environmentId()))
+            throw new ApplicationException(ApplicationError.notFound("Environment", command.environmentId()));
         var previous = legacy.lock(lab, legacyId);
         var imported = repository.importedMaterial(lab, legacyId);
         if (imported.isPresent()) return imported.get();
         if (repository.codeExists(lab, previous.code(), null)) throw conflict("Material code already exists; review the legacy record before importing");
-        var material = repository.saveMaterial(new RawMaterial(null, lab, previous.code(), previous.name(),
+        var material = repository.saveMaterial(new RawMaterial(null, lab, command.environmentId(), previous.code(), previous.name(),
             previous.unit(), previous.minimumStock()), legacyId);
         if (previous.balance().signum() < 0) throw conflict("Legacy balance requires reconciliation");
         if (previous.balance().signum() > 0) {
