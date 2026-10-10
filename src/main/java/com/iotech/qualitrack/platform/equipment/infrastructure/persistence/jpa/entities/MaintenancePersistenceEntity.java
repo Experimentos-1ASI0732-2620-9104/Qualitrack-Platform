@@ -22,11 +22,20 @@ public class MaintenancePersistenceEntity extends AuditableAbstractPersistenceEn
     @Column(name = "equipment_id", nullable = false)
     private Long equipmentId;
 
+    /**
+     * Environment where the equipment was located when the maintenance was registered.
+     */
+    @Column(name = "environment_id")
+    private Long environmentId;
+
     @Column(name = "maintenance_date", nullable = false)
     private LocalDate maintenanceDate;
 
     @Column(name = "technician_name", nullable = false, length = 150)
     private String technicianName;
+
+    @Column(name = "technician_staff_id")
+    private Long technicianStaffId;
 
     @Column(nullable = false, length = 1000)
     private String description;
