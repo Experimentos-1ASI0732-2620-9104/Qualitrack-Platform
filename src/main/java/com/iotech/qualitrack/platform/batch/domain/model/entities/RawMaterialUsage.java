@@ -1,16 +1,12 @@
 package com.iotech.qualitrack.platform.batch.domain.model.entities;
 
-import com.iotech.qualitrack.platform.batch.domain.model.commands.LinkRawMaterialCommand;
 import lombok.Getter;
-
-import java.util.Objects;
 
 /**
  * The RawMaterialUsage domain entity.
  *
- * <p>Represents the consumption of a raw material within a production batch.
- * It provides traceability between the batch and the raw material used during
- * the manufacturing process.</p>
+ * <p>Represents the consumption of a raw material lot within a production batch. It is created from the
+ * consumption confirmed by Inventory Management, so it keeps the exact lot, quantity and stock change.</p>
  */
 @Getter
 public class RawMaterialUsage {
@@ -22,6 +18,13 @@ public class RawMaterialUsage {
     private Long inventoryReceiptId;
 
     public void assignInventoryReceipt(Long receiptId) { this.inventoryReceiptId = receiptId; }
+
+    /**
+     * Idempotency key of the Inventory consumption that produced this usage.
+     */
+    private String operationId;
+
+    public void assignOperation(String operationId) { this.operationId = operationId; }
     private java.math.BigDecimal stockBefore;
     private java.math.BigDecimal stockAfter;
 
@@ -90,24 +93,4 @@ public class RawMaterialUsage {
         this.usageDate = usageDate;
     }
 
-    /**
-     * Constructs a new RawMaterialUsage from a command.
-     *
-     * @param command The command containing the raw material usage data.
-     * @param rawMaterialName The raw material display name.
-     * @param unit The measurement unit.
-     * @param usageDate The date when the material was used.
-     */
-    public RawMaterialUsage(LinkRawMaterialCommand command, String rawMaterialName, String unit, String usageDate) {
-        this.batchId = Objects.requireNonNull(command.batchId(), "Batch ID is required");
-        this.rawMaterialId = Objects.requireNonNull(command.rawMaterialId(), "Raw material ID is required");
-        this.rawMaterialName = Objects.requireNonNull(rawMaterialName, "Raw material name is required");
-        this.quantityUsed = Objects.requireNonNull(command.quantityUsed(), "Quantity used is required");
-        this.unit = Objects.requireNonNull(unit, "Unit is required");
-
-        if (usageDate == null || usageDate.isBlank()) {
-            throw new IllegalArgumentException("Usage date cannot be null or blank");
-        }
-        this.usageDate = usageDate;
-    }
 }
