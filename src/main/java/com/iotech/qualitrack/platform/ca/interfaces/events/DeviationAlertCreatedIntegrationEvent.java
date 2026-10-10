@@ -1,6 +1,7 @@
 package com.iotech.qualitrack.platform.ca.interfaces.events;
 
 import com.iotech.qualitrack.platform.ca.domain.model.events.DeviationAlertCreatedEvent;
+import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertOrigin;
 import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertSeverity;
 
 /**
@@ -21,6 +22,9 @@ import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertSeverity
  */
 public record DeviationAlertCreatedIntegrationEvent(
         Long alertId,
+        Long laboratoryId,
+        Long environmentId,
+        AlertOrigin origin,
         Long equipmentId,
         Long batchId,
         String parameterName,
@@ -39,6 +43,9 @@ public record DeviationAlertCreatedIntegrationEvent(
     public static DeviationAlertCreatedIntegrationEvent from(DeviationAlertCreatedEvent event) {
         return new DeviationAlertCreatedIntegrationEvent(
                 event.alertId(),
+                event.laboratoryId(),
+                event.environmentId(),
+                event.origin(),
                 event.equipmentId(),
                 event.batchId(),
                 event.parameterName(),
