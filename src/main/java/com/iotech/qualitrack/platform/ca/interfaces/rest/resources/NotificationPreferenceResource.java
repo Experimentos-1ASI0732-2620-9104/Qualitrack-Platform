@@ -6,7 +6,6 @@ public record NotificationPreferenceResource(
         Long id,
         Long userId,
         Boolean emailEnabled,
-        Boolean smsEnabled,
         Boolean inAppEnabled,
         AlertSeverity minimumSeverity
 ) {
