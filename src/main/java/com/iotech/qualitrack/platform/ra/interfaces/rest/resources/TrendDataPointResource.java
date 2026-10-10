@@ -1,17 +1,16 @@
 package com.iotech.qualitrack.platform.ra.interfaces.rest.resources;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
- * Resource representation of a single deviation trend data point.
- *
- * @param timestamp The timestamp when the measurement was recorded.
- * @param recordedValue The actual measured value.
- * @param upperThreshold The upper acceptable threshold.
- * @param lowerThreshold The lower acceptable threshold.
+ * Reading of a deviation trend.
  */
+@Schema(name = "TrendDataPointResponse", description = "Reading of the trend")
 public record TrendDataPointResource(
-        String timestamp,
-        Double recordedValue,
-        Double upperThreshold,
-        Double lowerThreshold
+        @Schema(description = "When it was measured") String timestamp,
+        @Schema(description = "Measured value") Double recordedValue,
+        @Schema(description = "Maximum accepted value, when known", nullable = true) Double upperThreshold,
+        @Schema(description = "Minimum accepted value, when known", nullable = true) Double lowerThreshold,
+        @Schema(description = "NORMAL, WARNING or CRITICAL; null when not evaluated", nullable = true) String state
 ) {
 }
