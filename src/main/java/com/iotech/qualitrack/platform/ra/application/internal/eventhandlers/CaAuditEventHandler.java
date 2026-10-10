@@ -2,6 +2,7 @@ package com.iotech.qualitrack.platform.ra.application.internal.eventhandlers;
 
 import com.iotech.qualitrack.platform.ca.interfaces.events.DeviationAlertAcknowledgedIntegrationEvent;
 import com.iotech.qualitrack.platform.ca.interfaces.events.DeviationAlertCreatedIntegrationEvent;
+import com.iotech.qualitrack.platform.ca.interfaces.events.DeviationAlertEscalatedIntegrationEvent;
 import com.iotech.qualitrack.platform.ca.interfaces.events.DeviationAlertResolvedIntegrationEvent;
 import com.iotech.qualitrack.platform.ca.interfaces.events.NotificationPreferenceUpdatedIntegrationEvent;
 import com.iotech.qualitrack.platform.ra.domain.model.valueobjects.AuditAction;
@@ -33,6 +34,19 @@ public class CaAuditEventHandler {
 
         raContextFacade.recordAuditLog(
                 AuditAction.REGISTER,
+                "DEVIATION_ALERT",
+                event.alertId(),
+                currentUser.userId(),
+                event.toString()
+        );
+    }
+
+    @EventListener(DeviationAlertEscalatedIntegrationEvent.class)
+    public void on(DeviationAlertEscalatedIntegrationEvent event) {
+        log.info("RA received deviation alert escalated event: {}", event);
+
+        raContextFacade.recordAuditLog(
+                AuditAction.UPDATE,
                 "DEVIATION_ALERT",
                 event.alertId(),
                 currentUser.userId(),
