@@ -8,7 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(
         name = "BatchResponse",
         description = "Production batch information response",
-        example = "{\"id\": 1, \"labId\": 1, \"productId\": 10, \"productName\": \"Ibuprofen 400mg\", \"batchNumber\": \"LOT-2026-A\", \"quantity\": 5000.0, \"unit\": \"units\", \"status\": \"PENDING\", \"startDate\": \"2026-05-12\", \"endDate\": null, \"notes\": \"Standard production run\"}"
+        example = "{\"id\": 1, \"labId\": 1, \"environmentId\": 2, \"productId\": 10, \"productName\": \"Ibuprofen 400mg\", \"batchNumber\": \"LOT-2026-A\", \"quantity\": 5000.0, \"unit\": \"units\", \"status\": \"PENDING\", \"startDate\": \"2026-05-12\", \"endDate\": null, \"notes\": \"Standard production run\"}"
 )
 public record BatchResource(
 
@@ -17,6 +17,8 @@ public record BatchResource(
 
         @Schema(description = "Associated laboratory numeric identifier", example = "1")
         Long labId,
+        @Schema(description = "Environment where the batch is manufactured", example = "2", nullable = true)
+        Long environmentId,
 
         @Schema(description = "Associated pharmaceutical product numeric identifier", example = "10")
         Long productId,
@@ -43,6 +45,9 @@ public record BatchResource(
         String endDate,
 
         @Schema(description = "Manufacturing or quality notes", example = "Standard production run", nullable = true)
-        String notes
+        String notes,
+
+        @Schema(description = "Container monitor of the container where the batch is stored", example = "12", nullable = true)
+        Long containerMonitorId
 ) {
 }
