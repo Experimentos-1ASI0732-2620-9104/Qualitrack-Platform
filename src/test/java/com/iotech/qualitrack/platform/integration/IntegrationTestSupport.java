@@ -106,6 +106,19 @@ public abstract class IntegrationTestSupport {
         return equipmentId;
     }
 
+    /** Registers the environmental device of the owner's environment and associates it with the environment. */
+    protected long environmentalDevice(ReadyAccount owner) throws Exception {
+        var created = call("POST", "/laboratories/" + owner.laboratoryId() + "/devices/environmental-devices", owner.token(), """
+                {"name":"Space monitor","sensorExternalId":"ENV-%1$s","serialNumber":"MAC-%1$s","model":"ESP32-WROOM-32","firmwareVersion":"1.0.3"}
+                """.formatted(UUID.randomUUID().toString().substring(0, 8)));
+        assertThat(created.statusCode()).withFailMessage(created.body()).isEqualTo(201);
+        long deviceId = id(created);
+        var associated = call("POST", environmentPath(owner) + "/environmental-devices", owner.token(),
+                "{\"deviceId\":" + deviceId + "}");
+        assertThat(associated.statusCode()).withFailMessage(associated.body()).isEqualTo(201);
+        return deviceId;
+    }
+
     protected static String environmentPath(ReadyAccount owner) {
         return "/laboratories/" + owner.laboratoryId() + "/environments/" + owner.environmentId();
     }
