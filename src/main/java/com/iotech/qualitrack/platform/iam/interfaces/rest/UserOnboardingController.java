@@ -7,7 +7,6 @@ import com.iotech.qualitrack.platform.iam.interfaces.rest.resources.UserOnboardi
 import com.iotech.qualitrack.platform.iam.interfaces.rest.transform.UserOnboardingResourceAssembler;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping(value = "/api/v1/users/me/onboarding", produces = "application/json")
-@Tag(name = "Users")
 public class UserOnboardingController {
     private final UserOnboardingQueryService service;
 
@@ -28,7 +26,7 @@ public class UserOnboardingController {
     @GetMapping
     @Operation(summary = "Get current user's onboarding state",
             description = "Resolves subscription entitlement and laboratory from the authenticated user. "
-                    + "nextStep is SUBSCRIPTION, LABORATORY or READY.")
+                    + "nextStep is PASSWORD_CHANGE, SUBSCRIPTION, LABORATORY or READY.")
     @ApiResponse(responseCode = "200", description = "Authoritative onboarding state")
     @ApiResponse(responseCode = "401", description = "Authentication required")
     public ResponseEntity<UserOnboardingResource> getOnboarding(@AuthenticationPrincipal UserDetailsImpl user) {
