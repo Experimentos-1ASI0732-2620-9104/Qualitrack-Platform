@@ -8,6 +8,10 @@ hide circle
 hide empty members
 
 package "shared" {
+  package "application.notifications" {
+    interface EmailSender
+  }
+
   package "domain" {
     abstract class AbstractDomainAggregateRoot<T>
   }
@@ -33,10 +37,13 @@ package "iam" {
     class Role
     class Username
     class PasswordHash
+    class EmailAddress
+    class PasswordRecovery
     enum Roles
     enum UserStatus
     interface UserRepository
     interface RoleRepository
+    interface PasswordRecoveryRepository
   }
 
   package "application" {
@@ -48,6 +55,8 @@ package "iam" {
     class UserQueryServiceImpl
     class RoleCommandServiceImpl
     class RoleQueryServiceImpl
+    interface PasswordRecoveryCommandService
+    class PasswordRecoveryCommandServiceImpl
     interface HashingService
     interface TokenService
   }
@@ -69,13 +78,49 @@ package "iam" {
   package "interfaces" {
     class IamContextFacade
     class AuthenticationController
+    class PasswordRecoveryController
     class UsersController
     class RolesController
+    class UserAccountController
+    class UserAccountUpdatedIntegrationEvent
     class SignInResource
     class SignUpResource
     class AuthenticatedUserResource
     class UserResource
     class RoleResource
+  }
+}
+
+package "profile" {
+  package "domain" {
+    class Profile
+    class PersonName
+    class Dni
+    class PhoneNumber
+    class Location
+    class ProfilePhoto
+    class PhotoImage
+    interface ProfileRepository
+  }
+
+  package "application" {
+    interface ProfileCommandService
+    interface ProfileQueryService
+    class ProfileCommandServiceImpl
+    class ProfileQueryServiceImpl
+    interface ProfilePhotoStorage
+  }
+
+  package "infrastructure" {
+    class ProfileRepositoryImpl
+    class DatabaseProfilePhotoStorage
+  }
+
+  package "interfaces" {
+    class ProfileContextFacade
+    class ProfileController
+    class StaffProfileController
+    class ProfileUpdatedIntegrationEvent
   }
 }
 
@@ -147,6 +192,7 @@ package "inventory" {
     class "InventoryImportServiceImpl" as InvInventoryImportServiceImpl
     class "InventoryContextFacadeImpl" as InvInventoryContextFacadeImpl
     class "InventoryMovementRecorder" as InvInventoryMovementRecorder
+    class "InventoryExternalEquipmentService" as InvInventoryExternalEquipmentService
   }
   package "infrastructure" {
     class "InventoryRepositoryImpl" as InvInventoryRepositoryImpl
@@ -194,6 +240,7 @@ package "equipment" {
   }
 
   package "interfaces" {
+    interface EquipmentContextFacade
     class EquipmentController
     class EquipmentBpmConfigController
     class EquipmentMaintenanceController
@@ -226,6 +273,7 @@ package "batch" {
     class RawMaterialUsageCommandServiceImpl
     class ExternalLaboratoryService
     class BatchExternalComplianceService
+    class BatchExternalEquipmentService
   }
 
   package "interfaces" {
@@ -234,24 +282,26 @@ package "batch" {
     class BatchRawMaterialUsageController
     class LaboratoryBatchesController
     class BatchCreatedIntegrationEvent
+    class BatchStartedIntegrationEvent
     class BatchReleasedIntegrationEvent
     class BatchRejectedIntegrationEvent
     class RawMaterialLinkedToBatchIntegrationEvent
+    class BatchStoredInContainerIntegrationEvent
   }
 }
 
 package "tracking" {
   package "domain" {
-    class EquipmentTelemetry
-    class EquipmentTelemetryStatus
+    class EnvironmentalProfile
     class Measurement
-    class TelemetryHistoryPoint
-    enum TelemetryStatus
-    enum TelemetryParameterType
-    interface EquipmentTelemetryRepository
-    interface EquipmentTelemetryStatusRepository
+    class ActuationEvent
+    class EnvironmentalThreshold
+    class ActuationRule
+    enum MonitoredMetric
+    enum EnvironmentalState
+    interface EnvironmentalProfileRepository
     interface MeasurementRepository
-    interface TelemetryHistoryPointRepository
+    interface ActuationEventRepository
   }
 
   package "application" {
@@ -260,17 +310,18 @@ package "tracking" {
     class TrackingCommandServiceImpl
     class TrackingQueryServiceImpl
     class TrackingExternalEquipmentService
-    class TrackingExternalComplianceService
-    class TrackingExternalAuditService
+    class TrackingContextFacadeImpl
   }
 
   package "interfaces" {
-    class TrackingContextFacade
-    class TelemetryController
-    class EquipmentTelemetryStatusUpdatedIntegrationEvent
+    class EnvironmentTelemetryController
+    class ContainerMonitorTelemetryController
+    class DeviceTrackingController
     class MeasurementRecordedIntegrationEvent
-    class TelemetryHistoryPointRecordedIntegrationEvent
-    class TelemetryAnomalyDetectedIntegrationEvent
+    class EnvironmentalDeviationDetectedIntegrationEvent
+    class EnvironmentalConditionNormalizedIntegrationEvent
+    class EnvironmentalProfileUpdatedIntegrationEvent
+    interface TrackingContextFacade
   }
 }
 
@@ -279,12 +330,15 @@ package "ca" {
     class DeviationAlert
     class ComplianceEvent
     class NotificationPreference
+    class Notification
+    enum NotificationType
     enum AlertSeverity
     enum AlertStatus
     enum ComplianceEventType
     interface DeviationAlertRepository
     interface ComplianceEventRepository
     interface NotificationPreferenceRepository
+    interface NotificationRepository
   }
 
   package "application" {
@@ -292,13 +346,21 @@ package "ca" {
     interface CaQueryService
     class CaCommandServiceImpl
     class CaQueryServiceImpl
-    class CaExternalBatchService
     class CaExternalEquipmentService
+    class CaExternalTrackingService
+    interface NotificationCommandService
+    interface NotificationQueryService
+    class NotificationCommandServiceImpl
+    class NotificationQueryServiceImpl
+    class AlertNotificationEventHandler
+    class BatchNotificationEventHandler
+    class CriticalAlertEmailScheduler
     class BatchReleasedComplianceEventHandler
     class BatchRejectedComplianceEventHandler
     class CalibrationExpiredEventHandler
     class RawMaterialLowStockComplianceEventHandler
-    class TelemetryAnomalyDetectedComplianceEventHandler
+    class EnvironmentalDeviationComplianceEventHandler
+    class EnvironmentalConditionNormalizedComplianceEventHandler
   }
 
   package "interfaces" {
@@ -306,6 +368,7 @@ package "ca" {
     class DeviationAlertController
     class ComplianceEventController
     class NotificationPreferenceController
+    class NotificationController
     class DeviationAlertCreatedIntegrationEvent
     class DeviationAlertAcknowledgedIntegrationEvent
     class DeviationAlertResolvedIntegrationEvent
@@ -328,8 +391,6 @@ package "ra" {
     enum TrendDirection
     interface AuditReportRepository
     interface AuditLogRepository
-    interface KpiDashboardRepository
-    interface DeviationTrendRepository
   }
 
   package "application" {
@@ -343,6 +404,8 @@ package "ra" {
     class RaExternalEquipmentService
     class RaExternalBatchService
     class RaExternalComplianceService
+    class RaExternalTrackingService
+    class RaExternalInventoryService
     class LaboratoryAuditEventHandler
     class EquipmentAuditEventHandler
     class BatchAuditEventHandler
@@ -355,11 +418,13 @@ package "ra" {
     class KpiDashboardController
     class DeviationTrendController
     class ReportController
-    class AuditLogController
+    class BatchReportController
+    class LaboratoryReportController
+    class EquipmentReportController
+    class BatchAuditLogController
+    class EquipmentAuditLogController
     class AuditReportGeneratedIntegrationEvent
     class AuditLogEntryRecordedIntegrationEvent
-    class KpiDashboardCalculatedIntegrationEvent
-    class DeviationTrendCalculatedIntegrationEvent
   }
 }
 
@@ -369,6 +434,7 @@ package "subscription" {
     class SubscriptionPlan
     class SubscriptionPayment
     class Money
+    class SubscriptionPlanCatalog
     enum PlanCode
     enum BillingCycle
     enum SubscriptionStatus
@@ -382,8 +448,11 @@ package "subscription" {
   package "application" {
     interface SubscriptionCommandService
     interface SubscriptionQueryService
+    interface SubscriptionPlanCommandService
     class SubscriptionCommandServiceImpl
     class SubscriptionQueryServiceImpl
+    class SubscriptionPlanCommandServiceImpl
+    class SubscriptionPlanSeedEventHandler
     class ExternalStripeService
     class StripeCheckoutSessionResult
     class StripeSubscriptionDetails
@@ -392,6 +461,7 @@ package "subscription" {
   package "interfaces" {
     class SubscriptionContextFacade
     class SubscriptionController
+    class LaboratorySubscriptionController
     class StripeWebhookController
     class CheckoutSessionCreatedIntegrationEvent
     class SubscriptionActivatedIntegrationEvent
@@ -405,6 +475,8 @@ package "external systems" {
 }
 
 User --|> AbstractDomainAggregateRoot
+Profile --|> AbstractDomainAggregateRoot
+Notification --|> AbstractDomainAggregateRoot
 Laboratory --|> AbstractDomainAggregateRoot
 Equipment --|> AbstractDomainAggregateRoot
 Batch --|> AbstractDomainAggregateRoot
@@ -437,6 +509,11 @@ AuditLogCommandServiceImpl ..|> AuditLogCommandService
 
 SubscriptionCommandServiceImpl ..|> SubscriptionCommandService
 SubscriptionQueryServiceImpl ..|> SubscriptionQueryService
+SubscriptionPlanCommandServiceImpl ..|> SubscriptionPlanCommandService
+SubscriptionPlanCommandServiceImpl --> SubscriptionPlanRepository
+SubscriptionPlanSeedEventHandler --> SubscriptionPlanCommandService
+SubscriptionPlanSeedEventHandler --> SubscriptionPlanCatalog
+SubscriptionPlanCatalog o-- SubscriptionPlan
 
 UserCommandServiceImpl ..|> UserCommandService
 UserQueryServiceImpl ..|> UserQueryService
@@ -461,6 +538,9 @@ SubscriptionPayment o-- Money
 
 AuthenticationController --> UserCommandService
 AuthenticationController --> TokenService
+PasswordRecoveryController --> PasswordRecoveryCommandService
+PasswordRecoveryCommandServiceImpl ..|> PasswordRecoveryCommandService
+PasswordRecoveryCommandServiceImpl --> PasswordRecoveryRepository
 WebSecurityConfiguration --> BearerAuthorizationRequestFilter
 BearerAuthorizationRequestFilter --> TokenService
 UserDetailsServiceImpl --> UserRepository
@@ -483,25 +563,66 @@ BatchController --> BatchQueryService
 BatchRawMaterialUsageController --> RawMaterialUsageQueryService
 LaboratoryBatchesController --> BatchQueryService
 
-TelemetryController --> TrackingCommandService
-TelemetryController --> TrackingQueryService
+EnvironmentTelemetryController --> TrackingCommandService
+EnvironmentTelemetryController --> TrackingQueryService
+ContainerMonitorTelemetryController --> TrackingCommandService
+ContainerMonitorTelemetryController --> TrackingQueryService
+DeviceTrackingController --> TrackingQueryService
 
 DeviationAlertController --> CaCommandService
 DeviationAlertController --> CaQueryService
 ComplianceEventController --> CaQueryService
 NotificationPreferenceController --> CaCommandService
 NotificationPreferenceController --> CaQueryService
+NotificationController --> NotificationCommandService
+NotificationController --> NotificationQueryService
+DeviationAlertController --> NotificationCommandService : e-mail notice (TS78)
+NotificationCommandServiceImpl ..|> NotificationCommandService
+NotificationQueryServiceImpl ..|> NotificationQueryService
+NotificationCommandServiceImpl --> NotificationRepository
+NotificationCommandServiceImpl --> IamContextFacade : accounts of the laboratory
+NotificationCommandServiceImpl --> EmailSender : critical alerts (US84)
+AlertNotificationEventHandler --> NotificationCommandService
+AlertNotificationEventHandler --> CriticalAlertEmailScheduler
+BatchNotificationEventHandler --> NotificationCommandService
+AlertNotificationEventHandler --> ProfileContextFacade : who attended
+BatchReleasedIntegrationEvent ..> BatchNotificationEventHandler
+BatchRejectedIntegrationEvent ..> BatchNotificationEventHandler
 
-KpiDashboardController --> RaCommandService
+UserAccountController --> UserCommandService
+ProfileController --> ProfileCommandService
+ProfileController --> ProfileQueryService
+StaffProfileController --> ProfileQueryService
+ProfileCommandServiceImpl ..|> ProfileCommandService
+ProfileQueryServiceImpl ..|> ProfileQueryService
+ProfileCommandServiceImpl --> ProfileRepository
+ProfileCommandServiceImpl --> ProfilePhotoStorage
+ProfileQueryServiceImpl --> ProfileRepository
+ProfileQueryServiceImpl --> IamContextFacade : account
+ProfileQueryServiceImpl --> LaboratoryContextFacade : staff record
+ProfileRepositoryImpl ..|> ProfileRepository
+DatabaseProfilePhotoStorage ..|> ProfilePhotoStorage
+ProfileContextFacade --> ProfileQueryService
+Profile --> PersonName
+Profile --> Dni
+Profile --> PhoneNumber
+Profile --> Location
+Profile --> ProfilePhoto
+ProfileUpdatedIntegrationEvent ..> StaffRepository : staff name
+UserAccountUpdatedIntegrationEvent ..> StaffRepository : staff e-mail
+
 KpiDashboardController --> RaQueryService
-DeviationTrendController --> RaCommandService
 DeviationTrendController --> RaQueryService
-ReportController --> RaCommandService
-AuditLogController --> AuditLogCommandService
-AuditLogController --> RaQueryService
+ReportController --> RaQueryService
+BatchReportController --> RaCommandService
+LaboratoryReportController --> RaCommandService
+EquipmentReportController --> RaCommandService
+BatchAuditLogController --> RaQueryService
+EquipmentAuditLogController --> RaQueryService
 
 SubscriptionController --> SubscriptionCommandService
 SubscriptionController --> SubscriptionQueryService
+LaboratorySubscriptionController --> SubscriptionQueryService
 StripeWebhookController --> SubscriptionCommandService
 StripeWebhookController --> SubscriptionQueryService
 StripeWebhookController --> ExternalStripeService
@@ -511,19 +632,25 @@ ExternalLabService --> LaboratoryContextFacade
 ExternalLaboratoryService --> LaboratoryContextFacade
 BatchExternalComplianceService --> ComplianceContextFacade
 LaboratoryExternalComplianceService --> ComplianceContextFacade
-TrackingExternalEquipmentService --> EquipmentRepository
-TrackingExternalComplianceService --> ComplianceContextFacade
-TrackingExternalAuditService --> RaContextFacade
-CaExternalBatchService --> BatchContextFacade
-CaExternalEquipmentService --> EquipmentRepository
+TrackingExternalEquipmentService --> EquipmentContextFacade
+InvInventoryExternalEquipmentService --> EquipmentContextFacade : container monitor
+BatchExternalEquipmentService --> EquipmentContextFacade : container monitor
+InvInventoryCommandServiceImpl --> InvInventoryExternalEquipmentService
+BatchCommandServiceImpl --> BatchExternalEquipmentService
+CaExternalEquipmentService --> EquipmentContextFacade : device and origin
+CaExternalTrackingService --> TrackingContextFacade : related actions
+TrackingContextFacadeImpl ..|> TrackingContextFacade
 RaExternalLaboratoryService --> LaboratoryContextFacade
-RaExternalEquipmentService --> EquipmentRepository
-RaExternalBatchService --> BatchContextFacade
-RaExternalComplianceService --> ComplianceContextFacade
+RaExternalEquipmentService --> EquipmentContextFacade : device names
+RaExternalBatchService --> BatchContextFacade : traceability
+RaExternalComplianceService --> ComplianceContextFacade : environment alerts
+RaExternalTrackingService --> TrackingContextFacade : readings and actions
+RaExternalInventoryService --> InvInventoryContextFacade : materials and lots
 
 RawMaterialLowStockIntegrationEvent ..> RawMaterialLowStockComplianceEventHandler
 CalibrationExpiredIntegrationEvent ..> CalibrationExpiredEventHandler
-TelemetryAnomalyDetectedIntegrationEvent ..> TelemetryAnomalyDetectedComplianceEventHandler
+EnvironmentalDeviationDetectedIntegrationEvent ..> EnvironmentalDeviationComplianceEventHandler
+EnvironmentalConditionNormalizedIntegrationEvent ..> EnvironmentalConditionNormalizedComplianceEventHandler
 BatchReleasedIntegrationEvent ..> BatchReleasedComplianceEventHandler
 BatchRejectedIntegrationEvent ..> BatchRejectedComplianceEventHandler
 
@@ -533,10 +660,11 @@ StaffRegisteredIntegrationEvent ..> LaboratoryAuditEventHandler
 EquipmentRegisteredIntegrationEvent ..> EquipmentAuditEventHandler
 MaintenanceRegisteredIntegrationEvent ..> EquipmentAuditEventHandler
 BatchCreatedIntegrationEvent ..> BatchAuditEventHandler
+BatchStartedIntegrationEvent ..> BatchAuditEventHandler
 RawMaterialLinkedToBatchIntegrationEvent ..> BatchAuditEventHandler
+BatchStoredInContainerIntegrationEvent ..> BatchAuditEventHandler
 DeviationAlertCreatedIntegrationEvent ..> CaAuditEventHandler
-MeasurementRecordedIntegrationEvent ..> TrackingAuditEventHandler
-TelemetryHistoryPointRecordedIntegrationEvent ..> TrackingAuditEventHandler
+EnvironmentalProfileUpdatedIntegrationEvent ..> TrackingAuditEventHandler
 
 SubscriptionActivatedIntegrationEvent ..> RaContextFacade
 SubscriptionPaymentRecordedIntegrationEvent ..> RaContextFacade
