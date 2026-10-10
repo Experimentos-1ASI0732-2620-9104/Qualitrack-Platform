@@ -66,6 +66,11 @@ public class StaffRepositoryImpl implements StaffRepository {
     }
 
     @Override
+    public Optional<StaffMember> findByUserId(Long userId) {
+        return repository.findByUserId(userId).map(StaffPersistenceAssembler::toDomainFromPersistence);
+    }
+
+    @Override
     public void deleteById(Long id) {
         repository.deleteById(id);
     }
