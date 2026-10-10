@@ -19,9 +19,9 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
@@ -31,7 +31,6 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
  */
 @RestController
 @RequestMapping(value = "/api/v1/laboratories", produces = APPLICATION_JSON_VALUE)
-@Tag(name = "Laboratories", description = "Laboratory management endpoints")
 public class LaboratoryController {
     private final LaboratoryCommandService laboratoryCommandService;
     private final LaboratoryQueryService laboratoryQueryService;
@@ -60,10 +59,11 @@ public class LaboratoryController {
                         .<Result<Laboratory, ApplicationError>>map(Result::success)
                         .orElseGet(() -> Result.failure(ApplicationError.notFound("Laboratory", laboratoryId))));
 
-        return ResponseEntityAssembler.toResponseEntityFromResult(
+        return ResponseEntityAssembler.toCreatedResponseEntityAtLocation(
                 result,
                 LaboratoryResourceFromEntityAssembler::toResourceFromEntity,
-                HttpStatus.CREATED
+                laboratory -> org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath()
+                        .path("/api/v1/laboratories/{laboratoryId}").buildAndExpand(laboratory.getId()).toUri()
         );
     }
 
@@ -71,20 +71,25 @@ public class LaboratoryController {
     @Operation(summary = "Get laboratory by ID", description = "Retrieves a specific laboratory by its numeric identifier.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Laboratory found", content = @Content(schema = @Schema(implementation = LaboratoryResource.class))),
-            @ApiResponse(responseCode = "404", description = "Laboratory not found")
+            @ApiResponse(responseCode = "404", description = "Laboratory not found",
+                    content = @Content(schema = @Schema(implementation = com.iotech.qualitrack.platform.shared.interfaces.rest.resources.ErrorResource.class)))
     })
-    public ResponseEntity<LaboratoryResource> getLaboratoryById(
+    public ResponseEntity<?> getLaboratoryById(
             @PathVariable @Parameter(description = "Laboratory numeric identifier", example = "1", required = true) Long laboratoryId
     ) {
-        var laboratory = laboratoryQueryService.handle(new GetLaboratoryByIdQuery(laboratoryId));
-        if (laboratory.isEmpty()) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(LaboratoryResourceFromEntityAssembler.toResourceFromEntity(laboratory.get()));
+        return laboratoryQueryService.handle(new GetLaboratoryByIdQuery(laboratoryId))
+                .<ResponseEntity<?>>map(laboratory -> ResponseEntity.ok(LaboratoryResourceFromEntityAssembler.toResourceFromEntity(laboratory)))
+                .orElseGet(() -> com.iotech.qualitrack.platform.shared.interfaces.rest.transform.ErrorResponseAssembler
+                        .toErrorResponseFromApplicationError(ApplicationError.notFound("Laboratory", laboratoryId)));
     }
 
     @PutMapping("/{laboratoryId}")
-    @Operation(summary = "Update laboratory profile", description = "Updates an existing laboratory's basic information.")
+    @PreAuthorize("@tenantAccess.allows('laboratoryId', #laboratoryId) and hasAnyAuthority('ROLE_QA_MANAGER', 'ROLE_ADMIN')")
+    @Operation(summary = "Update laboratory profile",
+            description = "Updates an existing laboratory's basic information. Reserved to the quality managers of the laboratory.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Laboratory updated successfully", content = @Content(schema = @Schema(implementation = LaboratoryResource.class))),
+            @ApiResponse(responseCode = "403", description = "Laboratory not available to the account or missing quality role"),
             @ApiResponse(responseCode = "404", description = "Laboratory not found")
     })
     public ResponseEntity<?> updateLaboratory(
