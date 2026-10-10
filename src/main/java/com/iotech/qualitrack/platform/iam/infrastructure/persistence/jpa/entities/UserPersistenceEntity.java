@@ -18,13 +18,17 @@ import java.util.Set;
 @Table(
         name = "iam_users",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"username"})
+                @UniqueConstraint(columnNames = {"username"}),
+                @UniqueConstraint(columnNames = {"email"})
         }
 )
 public class UserPersistenceEntity extends AuditableAbstractPersistenceEntity {
 
     @Column(nullable = false, length = 80)
     private String username;
+
+    @Column(length = 120)
+    private String email;
 
     @Column(nullable = false, length = 255)
     private String password;
@@ -35,6 +39,9 @@ public class UserPersistenceEntity extends AuditableAbstractPersistenceEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private UserStatus status;
+
+    @Column(name = "password_change_required", nullable = false)
+    private boolean passwordChangeRequired;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
