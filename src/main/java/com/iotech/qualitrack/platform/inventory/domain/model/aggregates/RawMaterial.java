@@ -11,9 +11,21 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Catalog identity of a raw material kept in an environment of the laboratory.
- * Suppliers, expiration and quantities belong to individual receipts.
- * The environment is null only for materials registered before environments existed.
+ * Represents the catalog identity of a raw material
+ * registered within a laboratory environment.
+ *
+ * <p>A raw material maintains its identification,
+ * measurement unit and minimum stock threshold.</p>
+ *
+ * <p>Supplier information, expiration dates and
+ * inventory quantities belong to individual supplier lots
+ * rather than the material itself.</p>
+ *
+ * <p>Stock availability is calculated from registered lots,
+ * avoiding duplicated stock counters.</p>
+ *
+ * <p>The environment identifier may be null only for
+ * materials registered before environments were introduced.</p>
  */
 @Getter
 public class RawMaterial extends AbstractDomainAggregateRoot<RawMaterial> {
@@ -25,6 +37,27 @@ public class RawMaterial extends AbstractDomainAggregateRoot<RawMaterial> {
     private final String unit;
     private final BigDecimal minimumStock;
 
+
+
+    /**
+     * Creates or reconstructs a raw material aggregate.
+     *
+     * <p>Validates the identifiers, material code, name,
+     * measurement unit and minimum stock quantity.</p>
+     *
+     * <p>Material codes and names are normalized by removing
+     * surrounding whitespace. The measurement unit is
+     * normalized according to the supported stock units.</p>
+     *
+     * @param id the material identifier, or null for a new material
+     * @param laboratoryId the owning laboratory identifier
+     * @param environmentId the assigned environment identifier, when available
+     * @param code the material identification code
+     * @param name the material name
+     * @param unit the measurement unit
+     * @param minimumStock the minimum stock threshold
+     * @throws IllegalArgumentException when the supplied material data is invalid
+     */
     public RawMaterial(Long id, Long laboratoryId, Long environmentId, String code, String name,
                        String unit, BigDecimal minimumStock) {
         if (id != null && id <= 0) throw new IllegalArgumentException("Invalid material ID");
@@ -42,12 +75,18 @@ public class RawMaterial extends AbstractDomainAggregateRoot<RawMaterial> {
         this.minimumStock = minimumStock;
     }
 
-    /** True when the material is kept in the given environment. */
-    public boolean belongsToEnvironment(Long environmentId) {
-        return this.environmentId != null && this.environmentId.equals(environmentId);
-    }
 
-    /** Calculates usable stock from distinct receipts; never stores a second stock counter. */
+    /**
+     * Calculates the usable stock of a raw material
+     * from its registered supplier lots.
+     *
+     * @param receipts the supplier lots associated with the material
+     * @param onDate the reference date for stock availability
+     * @return the total usable quantity of the material
+     * @throws IllegalArgumentException when a lot belongs to another material or violates stock rules
+     * @throws IllegalStateException when the material is not registered
+     * @throws NullPointerException when required arguments are null
+     */
     public BigDecimal usableStock(List<RawMaterialBatch> receipts, LocalDate onDate) {
         Objects.requireNonNull(receipts, "Receipts are required");
         Objects.requireNonNull(onDate, "Reference date is required");
@@ -67,4 +106,16 @@ public class RawMaterial extends AbstractDomainAggregateRoot<RawMaterial> {
         }
         return total;
     }
+
+    /**
+     * Determines whether this raw material belongs
+     * to the specified laboratory environment.
+     *
+     * @param environmentId the environment identifier to verify
+     * @return true when the material is assigned to the environment, false otherwise
+     */
+    public boolean belongsToEnvironment(Long environmentId) {
+        return this.environmentId != null && this.environmentId.equals(environmentId);
+    }
+
 }
