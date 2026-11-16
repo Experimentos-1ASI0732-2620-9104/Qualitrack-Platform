@@ -24,6 +24,13 @@ public interface EquipmentPersistenceRepository extends JpaRepository<EquipmentP
     List<EquipmentPersistenceEntity> findAllByLabId(Long labId);
 
     /**
+     * Finds the equipment of a laboratory located in one of its environments.
+     * @param labId The numeric ID of the laboratory.
+     * @param environmentId The numeric ID of the environment.
+     */
+    List<EquipmentPersistenceEntity> findAllByLabIdAndEnvironmentId(Long labId, Long environmentId);
+
+    /**
      * Finds an equipment by its linked external IoT sensor device ID.
      * @param sensorExternalId The external sensor ID (mapped as String in persistence).
      */
