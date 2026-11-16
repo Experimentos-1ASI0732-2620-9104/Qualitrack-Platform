@@ -4,8 +4,11 @@ package com.iotech.qualitrack.platform.tracking.domain.model.valueobjects;
  * Condition of a monitored metric evaluated against the configured thresholds.
  */
 public enum EnvironmentalState {
+    /** The value is inside the normal range. */
     NORMAL,
+    /** The value is outside the normal range but inside the critical limits. */
     WARNING,
+    /** The value is beyond the critical limits. */
     CRITICAL;
 
     /**

@@ -17,9 +17,11 @@ public enum MonitoredMetric {
     AIR_QUALITY("ppm", DeviceKind.ENVIRONMENTAL_DEVICE, Reading.NUMERIC),
     /** Motion detected by the environmental device: 1 when detected, 0 when the zone is quiet again. */
     MOTION("event", DeviceKind.ENVIRONMENTAL_DEVICE, Reading.DETECTION),
+    /** Temperature inside the container in degrees Celsius. */
     TEMPERATURE("°C", DeviceKind.CONTAINER_MONITOR, Reading.NUMERIC),
     /** Relative humidity in percent. */
     HUMIDITY("%RH", DeviceKind.CONTAINER_MONITOR, Reading.NUMERIC),
+    /** Light inside the container in lux. */
     LUMINOSITY("lux", DeviceKind.CONTAINER_MONITOR, Reading.NUMERIC),
     /** Identifier of the RFID tag read on the container. */
     RFID_TAG("tag", DeviceKind.CONTAINER_MONITOR, Reading.TEXT);
@@ -34,21 +36,31 @@ public enum MonitoredMetric {
         this.reading = reading;
     }
 
+    /**
+     * @return the fixed unit of the metric, used by its thresholds and readings
+     */
     public String unit() {
         return unit;
     }
 
     /**
-     * Whether the quality manager can configure WARNING/CRITICAL thresholds for the metric.
+     * Whether the quality manager can configure WARNING/CRITICAL thresholds for the metric; only numeric metrics
+     * accept them, so MOTION and RFID_TAG are recorded but never evaluated.
      */
     public boolean hasThresholds() {
         return reading == Reading.NUMERIC;
     }
 
+    /**
+     * Whether the reading carries a text value (the RFID tag) instead of a number.
+     */
     public boolean isText() {
         return reading == Reading.TEXT;
     }
 
+    /**
+     * Whether the reading is a detection whose value is 1 when detected and 0 otherwise.
+     */
     public boolean isDetection() {
         return reading == Reading.DETECTION;
     }
@@ -60,10 +72,19 @@ public enum MonitoredMetric {
         return deviceKind.name().equals(deviceType);
     }
 
+    /**
+     * @param deviceType device type as named by Equipment Management
+     * @return the metrics reported by that type of device, in declaration order
+     */
     public static List<MonitoredMetric> reportedBy(String deviceType) {
         return Arrays.stream(values()).filter(metric -> metric.isReportedBy(deviceType)).toList();
     }
 
+    /**
+     * Reads a metric name, ignoring case and surrounding spaces.
+     *
+     * @return the metric; empty when the value is blank or unknown
+     */
     public static Optional<MonitoredMetric> parse(String value) {
         if (value == null || value.isBlank()) return Optional.empty();
         try {
@@ -81,6 +102,9 @@ public enum MonitoredMetric {
         CONTAINER_MONITOR
     }
 
+    /**
+     * Kind of value a reading of the metric carries.
+     */
     private enum Reading {
         NUMERIC,
         DETECTION,

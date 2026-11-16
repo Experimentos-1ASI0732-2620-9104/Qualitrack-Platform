@@ -11,6 +11,16 @@ import java.time.Instant;
  */
 public record DeviceConnection(Long deviceId, Instant lastCommunicationAt, DeviceConnectionStatus status) {
 
+    /**
+     * Derives the connection state at a moment: CONNECTED when the device communicated within the expected period
+     * (inclusive), REQUIRES_REVIEW when it is silent for longer or never communicated.
+     *
+     * @param deviceId            device (equipment) identifier
+     * @param lastCommunicationAt latest reading or action received from the device, or null if none
+     * @param now                 moment of the evaluation
+     * @param expectedPeriod      maximum time between two communications
+     * @return the connection state of the device
+     */
     public static DeviceConnection evaluate(Long deviceId, Instant lastCommunicationAt, Instant now,
                                             ExpectedCommunicationPeriod expectedPeriod) {
         var connected = lastCommunicationAt != null

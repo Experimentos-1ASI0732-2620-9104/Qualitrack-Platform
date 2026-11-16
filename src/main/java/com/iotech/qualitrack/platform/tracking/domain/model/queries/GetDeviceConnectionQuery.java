@@ -8,6 +8,11 @@ package com.iotech.qualitrack.platform.tracking.domain.model.queries;
  * @param deviceId device (equipment) identifier
  */
 public record GetDeviceConnectionQuery(Long laboratoryId, Long environmentId, Long deviceId) {
+    /**
+     * Validates the components.
+     *
+     * @throws IllegalArgumentException when an identifier is not a positive number
+     */
     public GetDeviceConnectionQuery {
         if (laboratoryId == null || laboratoryId <= 0) throw new IllegalArgumentException("laboratoryId must be a positive number");
         if (environmentId == null || environmentId <= 0) throw new IllegalArgumentException("environmentId must be a positive number");

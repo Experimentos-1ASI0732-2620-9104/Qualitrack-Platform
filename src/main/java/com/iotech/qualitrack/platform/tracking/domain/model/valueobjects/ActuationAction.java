@@ -9,11 +9,17 @@ import java.util.Optional;
  * condition goes back to normal.
  */
 public enum ActuationAction {
+    /** Turns on the ventilation of the container. */
     VENTILATION_ON(true),
+    /** Turns off the ventilation once the condition recovered. */
     VENTILATION_OFF(false),
+    /** Starts the simulated refrigeration of the container. */
     COOLING_ON(true),
+    /** Stops the simulated refrigeration. */
     COOLING_OFF(false),
+    /** Opens the mechanism moved by the servo. */
     SERVO_OPEN(true),
+    /** Closes the mechanism moved by the servo. */
     SERVO_CLOSE(false);
 
     private final boolean activation;
@@ -29,6 +35,11 @@ public enum ActuationAction {
         return activation;
     }
 
+    /**
+     * Reads an action name, ignoring case and surrounding spaces.
+     *
+     * @return the action; empty when the value is blank or unknown
+     */
     public static Optional<ActuationAction> parse(String value) {
         if (value == null || value.isBlank()) return Optional.empty();
         try {

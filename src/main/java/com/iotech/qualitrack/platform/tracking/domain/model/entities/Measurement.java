@@ -17,10 +17,19 @@ import java.time.Instant;
 @Getter
 public class Measurement {
 
+    /**
+     * Identifier of the stored reading; null until it is saved.
+     */
     private Long id;
 
+    /**
+     * Laboratory (tenant) that owns the device.
+     */
     private Long laboratoryId;
 
+    /**
+     * Environment where the reading was taken.
+     */
     private Long environmentId;
 
     /**
@@ -29,7 +38,7 @@ public class Measurement {
     private Long equipmentId;
 
     /**
-     * Name of the measured metric.
+     * Name of the measured metric, as in {@link MonitoredMetric#name()}.
      */
     private String parameterName;
 
@@ -43,13 +52,19 @@ public class Measurement {
      */
     private String textValue;
 
+    /**
+     * Fixed unit of the metric, as in {@link MonitoredMetric#unit()}.
+     */
     private String unit;
 
     /**
-     * Moment of the reading in ISO-8601 format.
+     * Moment of the reading in ISO-8601 format, kept for the readings stored before {@link #measuredAt} existed.
      */
     private String timestamp;
 
+    /**
+     * Moment the device took the reading.
+     */
     private Instant measuredAt;
 
     /**
@@ -72,6 +87,9 @@ public class Measurement {
      */
     private Instant receivedAt;
 
+    /**
+     * Reconstructs a reading from persistence data, without validation.
+     */
     public Measurement(Long id, Long laboratoryId, Long environmentId, Long equipmentId, String parameterName,
                        Double value, String textValue, String unit, String timestamp, Instant measuredAt,
                        EnvironmentalState state, Double thresholdValue, Long profileVersion, Instant receivedAt) {
@@ -94,8 +112,15 @@ public class Measurement {
     /**
      * Records a reading received from a device.
      *
-     * @param evaluation result of the threshold of the metric, or null when the metric has none
-     * @throws IllegalArgumentException when the value does not match the metric
+     * <p>A numeric metric needs a finite value (MOTION only 1 or 0) and no text; RFID_TAG needs a text of up to 120
+     * characters and no numeric value. The unit is taken from the metric.</p>
+     *
+     * @param deviceId       device (equipment) that produced the reading
+     * @param evaluation     result of the threshold of the metric, or null when the metric has none
+     * @param profileVersion profile version used to evaluate the reading or reported by the device, or null
+     * @return a new, unsaved measurement
+     * @throws IllegalArgumentException when the device, the metric or the moment is missing or the value does not
+     *                                  match the metric
      */
     public static Measurement receive(Long laboratoryId, Long environmentId, Long deviceId, MonitoredMetric metric,
                                       Double value, String textValue, Instant measuredAt,
