@@ -3,7 +3,6 @@ package com.iotech.qualitrack.platform.batch.application.internal.queryservices;
 import com.iotech.qualitrack.platform.batch.application.internal.outboundservices.acl.BatchExternalEquipmentService;
 import com.iotech.qualitrack.platform.batch.domain.model.queries.GetBatchContainerQuery;
 import com.iotech.qualitrack.platform.batch.domain.model.valueobjects.BatchContainer;
-import com.iotech.qualitrack.platform.equipment.interfaces.acl.EquipmentContextFacade;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationException;
 import com.iotech.qualitrack.platform.batch.application.queryservices.BatchQueryService;
@@ -42,8 +41,7 @@ public class BatchQueryServiceImpl implements BatchQueryService {
                 .filter(value -> value.belongsTo(query.laboratoryId(), query.environmentId(), query.productId()))
                 .orElseThrow(() -> new ApplicationException(ApplicationError.notFound("Batch", query.batchId())));
         return batch.container().map(container -> new BatchContainer(batch.getId(), container.containerMonitorId(),
-                equipment.findContainerMonitor(query.laboratoryId(), container.containerMonitorId())
-                        .map(EquipmentContextFacade.ContainerReference::name).orElse(null),
+                equipment.findContainerName(query.laboratoryId(), container.containerMonitorId()).orElse(null),
                 container.environmentId(), container.assignedBy(), container.assignedAt()));
     }
 

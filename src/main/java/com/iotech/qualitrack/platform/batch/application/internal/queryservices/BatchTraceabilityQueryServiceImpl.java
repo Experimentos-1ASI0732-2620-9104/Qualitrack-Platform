@@ -55,8 +55,7 @@ public class BatchTraceabilityQueryServiceImpl implements BatchTraceabilityQuery
                         evidence.findSignatureByBatchId(batch.getId()),
                         evidence.findRejectionByBatchId(batch.getId()),
                         batch.container().map(container -> new BatchContainer(batch.getId(), container.containerMonitorId(),
-                                equipment.findContainerMonitor(batch.getLabId(), container.containerMonitorId())
-                                        .map(reference -> reference.name()).orElse(null),
+                                equipment.findContainerName(batch.getLabId(), container.containerMonitorId()).orElse(null),
                                 container.environmentId(), container.assignedBy(), container.assignedAt())))));
     }
 
