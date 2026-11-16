@@ -114,7 +114,7 @@ public class NotificationPreference {
      * Whether the user receives the e-mail notice of an alert. Only critical alerts are e-mailed (US84).
      */
     public boolean wantsEmail(AlertSeverity alertSeverity) {
-        return Boolean.TRUE.equals(emailEnabled) && alertSeverity == AlertSeverity.CRITICAL
-                && alertSeverity.isAtLeast(minimumSeverity);
+        // CRITICAL is the highest severity, so it always reaches the minimum severity of the user.
+        return Boolean.TRUE.equals(emailEnabled) && alertSeverity == AlertSeverity.CRITICAL;
     }
 }

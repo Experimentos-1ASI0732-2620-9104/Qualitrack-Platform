@@ -35,6 +35,16 @@ public record CreateDeviationAlertCommand(
         Instant detectedAt
 ) {
     /**
+     * Maximum length of the parameter name, the size of the parameter_name column.
+     */
+    public static final int MAX_PARAMETER_NAME_LENGTH = 100;
+
+    /**
+     * Maximum length of the unit, the size of the unit column.
+     */
+    public static final int MAX_UNIT_LENGTH = 20;
+
+    /**
      * Compact constructor for CreateDeviationAlertCommand.
      * Enforces Fail-Fast validation.
      */
@@ -68,5 +78,12 @@ public record CreateDeviationAlertCommand(
         }
         parameterName = parameterName.trim().toUpperCase();
         unit = unit.trim();
+        if (parameterName.length() > MAX_PARAMETER_NAME_LENGTH) {
+            throw new IllegalArgumentException("parameterName cannot be longer than %d characters"
+                    .formatted(MAX_PARAMETER_NAME_LENGTH));
+        }
+        if (unit.length() > MAX_UNIT_LENGTH) {
+            throw new IllegalArgumentException("unit cannot be longer than %d characters".formatted(MAX_UNIT_LENGTH));
+        }
     }
 }

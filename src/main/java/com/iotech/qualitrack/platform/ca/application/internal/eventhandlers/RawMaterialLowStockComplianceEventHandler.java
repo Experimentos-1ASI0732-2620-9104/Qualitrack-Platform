@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Instant;
 
 /**
@@ -18,16 +19,16 @@ import java.time.Instant;
 public class RawMaterialLowStockComplianceEventHandler {
 
     private final ComplianceEventRepository complianceEventRepository;
+    private final Clock complianceClock;
 
     /**
      * Creates a new RawMaterialLowStockComplianceEventHandler.
      *
      * @param complianceEventRepository compliance event repository
      */
-    public RawMaterialLowStockComplianceEventHandler(
-            ComplianceEventRepository complianceEventRepository
-    ) {
+    public RawMaterialLowStockComplianceEventHandler(ComplianceEventRepository complianceEventRepository, Clock complianceClock) {
         this.complianceEventRepository = complianceEventRepository;
+        this.complianceClock = complianceClock;
     }
 
     /**
@@ -54,7 +55,7 @@ public class RawMaterialLowStockComplianceEventHandler {
                                 event.currentStock(),
                                 event.minimumThreshold()
                         ),
-                Instant.now().toString(),
+                Instant.now(complianceClock).toString(),
                 null
         ));
     }

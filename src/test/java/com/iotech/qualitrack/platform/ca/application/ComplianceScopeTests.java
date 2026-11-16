@@ -1,4 +1,4 @@
-package com.iotech.qualitrack.platform;
+package com.iotech.qualitrack.platform.ca.application;
 
 import com.iotech.qualitrack.platform.ca.application.internal.outboundservices.acl.CaExternalTrackingService;
 import com.iotech.qualitrack.platform.ca.application.internal.queryservices.CaQueryServiceImpl;
