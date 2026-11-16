@@ -27,13 +27,7 @@ package "java.time" <<External>> {
 }
 
 package "external bounded contexts" <<External>> {
-  interface BatchRepository
-  interface DeviationAlertRepository
-  interface EquipmentRepository
-  interface BpmParameterConfigRepository
-  interface MaintenanceRepository
-  interface RawMaterialUsageRepository
-  interface LaboratoryRepository
+  class IamContextFacade
   interface LaboratoryContextFacade
   interface TrackingContextFacade
   interface ComplianceContextFacade
@@ -43,6 +37,11 @@ package "external bounded contexts" <<External>> {
 }
 
 package "ra.domain.model.valueobjects" {
+  class ReportEnvironment <<record>> {
+    + id: Long
+    + code: String
+    + name: String
+  }
   enum AuditAction {
     CREATE
     UPDATE
@@ -368,10 +367,14 @@ package "ra.application.internal.outboundservices.acl" {
 
   class RaExternalComplianceService {
     + findEnvironmentAlerts(laboratoryId, environmentId, period: ReportingPeriod): List<AlertReference>
+    + findBatchAlerts(batchId: Long): List<AlertReference>
+    + findDeviceAlerts(deviceIds: Collection<Long>): List<AlertReference>
   }
 
   class RaExternalEquipmentService {
     + deviceNames(laboratoryId: Long): Map<Long, String>
+    + equipmentIds(laboratoryId: Long): List<Long>
+    + findEquipmentLog(laboratoryId, environmentId, equipmentId): Optional<EquipmentLogReference>
   }
 
   class RaExternalInventoryService {
@@ -379,24 +382,29 @@ package "ra.application.internal.outboundservices.acl" {
   }
 
   class RaExternalBatchService {
+    + findBatch(batchId: Long): Optional<BatchReference>
+    + findBatches(laboratoryId: Long): List<BatchReference>
+    + findMaterialUses(batchId: Long): List<MaterialUse>
     + findTraceability(batchId: Long): Optional<TraceabilityReference>
   }
 
   class RaExternalLaboratoryService {
     + existsLaboratoryById(laboratoryId: Long): boolean
-    + findEnvironments(laboratoryId: Long): List<EnvironmentReference>
-    + findEnvironment(laboratoryId, environmentId): Optional<EnvironmentReference>
+    + laboratoryName(laboratoryId: Long): String
+    + findEnvironments(laboratoryId: Long): List<ReportEnvironment>
+    + findEnvironment(laboratoryId, environmentId): Optional<ReportEnvironment>
     + findStaffAccount(laboratoryId: Long, staffId: Long): Optional<Optional<Long>>
+  }
+
+  class RaExternalIamService {
+    + username(userId: Long): String
   }
 
   class RaOperationalDataService {
     + dashboard(laboratoryId: Long): KpiDashboard
-    + laboratoryName(laboratoryId: Long): String
-    + batch(id: Long): Batch
-    + batchAlerts(batchId: Long): List<DeviationAlert>
+    + batchDeviations(batchId: Long): List<BatchReportData.Deviation>
     + batchReport(...): BatchReportData
-    + equipment(id: Long): Equipment
-    + equipmentReport(...): EquipmentReportData
+    + equipmentReport(device: EquipmentLogReference, ...): EquipmentReportData
   }
 }
 
@@ -407,17 +415,16 @@ RaExternalEquipmentService --> EquipmentContextFacade
 RaExternalInventoryService --> InventoryContextFacade
 RaExternalBatchService --> BatchContextFacade
 RaExternalLaboratoryService --> LaboratoryContextFacade
-RaOperationalDataService --> EquipmentRepository
-RaOperationalDataService --> BatchRepository
-RaOperationalDataService --> DeviationAlertRepository
-RaOperationalDataService --> BpmParameterConfigRepository
-RaOperationalDataService --> RawMaterialUsageRepository
-RaOperationalDataService --> LaboratoryRepository
-RaOperationalDataService --> MaintenanceRepository
+RaExternalLaboratoryService ..> ReportEnvironment
+RaExternalIamService --> IamContextFacade
+RaOperationalDataService --> RaExternalBatchService
+RaOperationalDataService --> RaExternalEquipmentService
+RaOperationalDataService --> RaExternalComplianceService
+RaOperationalDataService --> RaExternalLaboratoryService
 note bottom of RaOperationalDataService
-  Operational counts, batch base data and the equipment log still read the
-  repositories of the other contexts; the indicators and the environmental,
-  inventory and traceability data are read through their facades.
+  Translates what Product Batch, Equipment, Compliance and Laboratory share
+  through their facades into the batch and equipment report data and the
+  operational counts of the indicators; it reads no repository of another context.
 end note
 
 package "ra.application.internal.outboundservices" {
@@ -450,6 +457,7 @@ ReportDocumentWriter ..> InventoryReportData
 
 RaCommandServiceImpl --> RaOperationalDataService
 RaCommandServiceImpl --> RaExternalLaboratoryService
+RaCommandServiceImpl --> RaExternalIamService
 RaCommandServiceImpl --> RaExternalTrackingService
 RaCommandServiceImpl --> RaExternalComplianceService
 RaCommandServiceImpl --> RaExternalEquipmentService
@@ -528,7 +536,11 @@ package "ra.application.acl" {
 }
 
 package "ra.interfaces.acl" {
-  interface RaContextFacade
+  interface RaContextFacade {
+    + recordAuditLog(action: String, entityType: String, entityId: Long, performedBy: Long, details: String): boolean
+    + existsAuditReportById(reportId: Long): boolean
+    + existsKpiDashboardByLaboratoryId(laboratoryId: Long): boolean
+  }
 }
 
 RaContextFacadeImpl ..|> RaContextFacade
