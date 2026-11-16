@@ -82,7 +82,7 @@ public class PasswordRecoveryCommandServiceImpl implements PasswordRecoveryComma
         if (account.isEmpty()) return Result.failure(ApplicationError.validationError("code", INVALID_CODE));
         var user = account.get();
         var now = iamClock.instant();
-        var pending = recoveries.findLatestByUserId(user.getId()).filter(recovery -> recovery.isUsable(now));
+        var pending = recoveries.findLatestByUserIdForUpdate(user.getId()).filter(recovery -> recovery.isUsable(now));
         if (pending.isEmpty()) return Result.failure(ApplicationError.validationError("code", INVALID_CODE));
         var recovery = pending.get();
         if (!hashing.matches(command.code(), recovery.getCodeHash())) {
