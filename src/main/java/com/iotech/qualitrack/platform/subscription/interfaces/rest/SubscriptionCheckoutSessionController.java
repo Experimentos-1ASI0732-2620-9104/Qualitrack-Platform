@@ -20,22 +20,25 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 public class SubscriptionCheckoutSessionController {
 
     private final SubscriptionCommandService subscriptionCommandService;
+    private final com.iotech.qualitrack.platform.shared.application.security.CurrentUser currentUser;
 
-    public SubscriptionCheckoutSessionController(SubscriptionCommandService subscriptionCommandService) {
+    public SubscriptionCheckoutSessionController(SubscriptionCommandService subscriptionCommandService,
+            com.iotech.qualitrack.platform.shared.application.security.CurrentUser currentUser) {
         this.subscriptionCommandService = subscriptionCommandService;
+        this.currentUser = currentUser;
     }
 
     @PostMapping(consumes = APPLICATION_JSON_VALUE)
     @Operation(summary = "Create subscription checkout session")
-    public ResponseEntity<?> createCheckoutSession(@RequestBody CreateCheckoutSessionResource resource,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal
-            com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.model.UserDetailsImpl user) {
-        if ((resource.userId() != null && !resource.userId().equals(user.getId()))
-                || (resource.laboratoryId() != null && !resource.laboratoryId().equals(user.getLaboratoryId()))) {
+    public ResponseEntity<?> createCheckoutSession(@RequestBody CreateCheckoutSessionResource resource) {
+        var userId = currentUser.userId();
+        var laboratoryId = currentUser.laboratoryId();
+        if ((resource.userId() != null && !resource.userId().equals(userId))
+                || (resource.laboratoryId() != null && !resource.laboratoryId().equals(laboratoryId))) {
             throw new org.springframework.security.access.AccessDeniedException("Checkout identity must match the authenticated user");
         }
         var command = CreateCheckoutSessionCommandFromResourceAssembler.toCommandFromResource(
-                new CreateCheckoutSessionResource(user.getId(), user.getLaboratoryId(), resource.planCode(),
+                new CreateCheckoutSessionResource(userId, laboratoryId, resource.planCode(),
                         resource.billingCycle(), resource.successUrl(), resource.cancelUrl()));
         var result = subscriptionCommandService.handle(command);
 
