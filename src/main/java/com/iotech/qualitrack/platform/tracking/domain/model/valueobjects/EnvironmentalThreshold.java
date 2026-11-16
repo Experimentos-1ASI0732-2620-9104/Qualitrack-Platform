@@ -8,7 +8,7 @@ package com.iotech.qualitrack.platform.tracking.domain.model.valueobjects;
  * critical limit) or not configured, so the air quality can be limited only from above while the temperature is
  * limited on both sides. Thresholds are configured per environment or container; there is no universal range.</p>
  *
- * @param metric      measured quantity, which must accept thresholds
+ * @param metric      measured quantity, which must accept thresholds (see {@link MonitoredMetric#hasThresholds()})
  * @param normalMin   lowest NORMAL value, or null when the metric has no lower limit
  * @param normalMax   highest NORMAL value, or null when the metric has no upper limit
  * @param criticalMin lowest WARNING value; lower values are CRITICAL
@@ -17,6 +17,13 @@ package com.iotech.qualitrack.platform.tracking.domain.model.valueobjects;
 public record EnvironmentalThreshold(MonitoredMetric metric, Double normalMin, Double normalMax,
                                      Double criticalMin, Double criticalMax) {
 
+    /**
+     * Validates the components.
+     *
+     * @throws IllegalArgumentException when the metric does not accept thresholds, a limit is not finite, a side of the
+     *                                  range is incomplete, no side is configured or the limits are not ordered
+     *                                  {@code criticalMin < normalMin < normalMax < criticalMax}
+     */
     public EnvironmentalThreshold {
         if (metric == null) throw new IllegalArgumentException("The metric is required");
         if (!metric.hasThresholds()) {
@@ -42,7 +49,11 @@ public record EnvironmentalThreshold(MonitoredMetric metric, Double normalMin, D
     }
 
     /**
-     * Classifies a value of the metric.
+     * Classifies a value of the metric. The limits themselves belong to the less severe state: a value equal to
+     * {@code normalMax} is NORMAL and a value equal to {@code criticalMax} is WARNING.
+     *
+     * @param value numeric value in the unit of the metric
+     * @return the state and the crossed limit (the critical limit for CRITICAL, the normal limit for WARNING)
      */
     public ThresholdEvaluation evaluate(double value) {
         if (criticalMin != null && value < criticalMin) return new ThresholdEvaluation(EnvironmentalState.CRITICAL, criticalMin);
@@ -52,6 +63,9 @@ public record EnvironmentalThreshold(MonitoredMetric metric, Double normalMin, D
         return new ThresholdEvaluation(EnvironmentalState.NORMAL, null);
     }
 
+    /**
+     * @return the fixed unit of the metric
+     */
     public String unit() {
         return metric.unit();
     }

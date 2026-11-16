@@ -41,6 +41,9 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 /**
  * Environmental profile, telemetry and actions of a container monitor
  * (US57, US58, US59, US63, US64, US65, US66, US69, TS43, TS44, TS45, TS55, TS56, TS59, TS60).
+ *
+ * <p>Every operation needs access to the laboratory; changing the profile also needs the QA_MANAGER or ADMIN role.
+ * The device must be a container monitor located in the environment of the path.</p>
  */
 @RestController
 @RequestMapping(value = "/api/v1/laboratories/{laboratoryId}/environments/{environmentId}/container-monitors/{deviceId}",
@@ -59,6 +62,12 @@ public class ContainerMonitorTelemetryController {
         this.trackingQueryService = trackingQueryService;
     }
 
+    /**
+     * Returns the profile of the container monitor.
+     *
+     * @return 200 with the profile, or 404 when the device is not a container monitor of the environment or has no
+     * profile yet
+     */
     @GetMapping("/environmental-profile")
     @Operation(summary = "Get the environmental profile of the container monitor",
             description = "Temperature, humidity and luminosity thresholds, actuation rules and their version.")
@@ -78,6 +87,11 @@ public class ContainerMonitorTelemetryController {
                         ApplicationError.notFound("EnvironmentalProfile", deviceId)));
     }
 
+    /**
+     * Replaces the temperature, humidity and luminosity thresholds (TS43, TS44).
+     *
+     * @return 200 with the saved profile, or 400 when the limits are not valid
+     */
     @PutMapping(value = "/environmental-profile/thresholds", consumes = APPLICATION_JSON_VALUE)
     @PreAuthorize(QUALITY_ROLES)
     @Operation(summary = "Save the thresholds of the container monitor",
@@ -99,6 +113,11 @@ public class ContainerMonitorTelemetryController {
                 EnvironmentalProfileResourceFromEntityAssembler::toResourceFromEntity, HttpStatus.OK);
     }
 
+    /**
+     * Replaces the actuation rules (TS45).
+     *
+     * @return 200 with the saved profile, or 400 when a rule is not valid
+     */
     @PutMapping(value = "/environmental-profile/actuation-rules", consumes = APPLICATION_JSON_VALUE)
     @PreAuthorize(QUALITY_ROLES)
     @Operation(summary = "Save the actuation rules of the container monitor",
@@ -120,6 +139,11 @@ public class ContainerMonitorTelemetryController {
                 EnvironmentalProfileResourceFromEntityAssembler::toResourceFromEntity, HttpStatus.OK);
     }
 
+    /**
+     * Records a reading synchronized from the Edge (TS55).
+     *
+     * @return 201 for a new reading, 200 for a reading already received, or 400 when it is not valid
+     */
     @PostMapping(value = "/telemetry-measurements", consumes = APPLICATION_JSON_VALUE)
     @Operation(summary = "Record a reading of the container monitor",
             description = "Synchronizes a temperature, humidity, luminosity or RFID reading from the Edge. The platform "
@@ -143,6 +167,11 @@ public class ContainerMonitorTelemetryController {
                 MeasurementResourceFromEntityAssembler::toResourceFromEntity);
     }
 
+    /**
+     * Returns the readings of a period, by default the last 24 hours and at most 31 days (TS59).
+     *
+     * @return 200 with the readings, or 404 when the device is not a container monitor of the environment
+     */
     @GetMapping("/telemetry-measurements")
     @Operation(summary = "Get the readings of the container monitor",
             description = "Readings of the period, oldest first. By default the last 24 hours.")
@@ -169,6 +198,11 @@ public class ContainerMonitorTelemetryController {
                         ApplicationError.notFound("ContainerMonitor", deviceId)));
     }
 
+    /**
+     * Records an action synchronized from the Edge (TS56).
+     *
+     * @return 201 for a new action, 200 for an action already received, or 400 when it is not valid
+     */
     @PostMapping(value = "/actuation-events", consumes = APPLICATION_JSON_VALUE)
     @Operation(summary = "Record an action of the container monitor",
             description = "Synchronizes from the Edge an action the device executed locally (ventilation, simulated "
@@ -191,6 +225,11 @@ public class ContainerMonitorTelemetryController {
                 ActuationEventResourceFromEntityAssembler::toResourceFromEntity);
     }
 
+    /**
+     * Returns the actions of a period, by default the last 24 hours and at most 31 days (TS60).
+     *
+     * @return 200 with the actions, or 404 when the device is not a container monitor of the environment
+     */
     @GetMapping("/actuation-events")
     @Operation(summary = "Get the actions of the container monitor",
             description = "Actions of the period, oldest first. By default the last 24 hours.")

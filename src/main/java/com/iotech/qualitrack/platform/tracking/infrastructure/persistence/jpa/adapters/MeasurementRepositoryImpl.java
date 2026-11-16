@@ -11,6 +11,10 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * JPA adapter of the domain {@link MeasurementRepository}: it delegates to Spring Data and translates the rows with the
+ * persistence assembler.
+ */
 @Repository
 public class MeasurementRepositoryImpl implements MeasurementRepository {
     private final MeasurementPersistenceRepository persistenceRepository;

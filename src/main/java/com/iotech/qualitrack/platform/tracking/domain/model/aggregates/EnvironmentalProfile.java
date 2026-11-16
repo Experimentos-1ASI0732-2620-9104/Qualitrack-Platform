@@ -25,10 +25,19 @@ import java.util.Set;
 @Getter
 public class EnvironmentalProfile extends AbstractDomainAggregateRoot<EnvironmentalProfile> {
 
+    /**
+     * Identifier of the stored profile; null until it is saved for the first time.
+     */
     private Long id;
 
+    /**
+     * Laboratory (tenant) that owns the environment or container monitor.
+     */
     private Long laboratoryId;
 
+    /**
+     * Whether the profile configures an environment or a container monitor; it decides which metrics it accepts.
+     */
     private ProfileScope scope;
 
     /**
@@ -46,8 +55,14 @@ public class EnvironmentalProfile extends AbstractDomainAggregateRoot<Environmen
      */
     private long version;
 
+    /**
+     * WARNING/CRITICAL limits, at most one per metric reported by the configured device.
+     */
     private List<EnvironmentalThreshold> thresholds;
 
+    /**
+     * Automatic actions of a container monitor; always empty for the ENVIRONMENT scope.
+     */
     private List<ActuationRule> actuationRules;
 
     /**
@@ -55,10 +70,14 @@ public class EnvironmentalProfile extends AbstractDomainAggregateRoot<Environmen
      */
     private Long updatedBy;
 
+    /**
+     * Moment of the last change; null until the first change.
+     */
     private Instant updatedAt;
 
     /**
-     * Reconstructs a profile from persistence data.
+     * Reconstructs a profile from persistence data; the lists are copied so the aggregate cannot be changed from
+     * outside.
      */
     public EnvironmentalProfile(Long id, Long laboratoryId, ProfileScope scope, Long environmentId, Long deviceId,
                                 long version, List<EnvironmentalThreshold> thresholds, List<ActuationRule> actuationRules,
@@ -76,7 +95,13 @@ public class EnvironmentalProfile extends AbstractDomainAggregateRoot<Environmen
     }
 
     /**
-     * Starts the empty profile of an environment.
+     * Starts the empty profile (version 0, no thresholds) of an environment, evaluated with the readings of its
+     * environmental device.
+     *
+     * @param laboratoryId  laboratory that owns the environment
+     * @param environmentId environment to configure
+     * @return a new, unsaved profile of ENVIRONMENT scope
+     * @throws IllegalArgumentException when an identifier is not a positive number
      */
     public static EnvironmentalProfile forEnvironment(Long laboratoryId, Long environmentId) {
         requirePositive(laboratoryId, "Laboratory ID");
@@ -86,7 +111,12 @@ public class EnvironmentalProfile extends AbstractDomainAggregateRoot<Environmen
     }
 
     /**
-     * Starts the empty profile of a container monitor.
+     * Starts the empty profile (version 0, no thresholds nor rules) of a container monitor.
+     *
+     * @param laboratoryId laboratory that owns the device
+     * @param deviceId     container monitor (equipment) to configure
+     * @return a new, unsaved profile of CONTAINER_MONITOR scope
+     * @throws IllegalArgumentException when an identifier is not a positive number
      */
     public static EnvironmentalProfile forContainerMonitor(Long laboratoryId, Long deviceId) {
         requirePositive(laboratoryId, "Laboratory ID");
@@ -96,8 +126,13 @@ public class EnvironmentalProfile extends AbstractDomainAggregateRoot<Environmen
     }
 
     /**
-     * Replaces every threshold of the profile (US56, US57, US58).
+     * Replaces every threshold of the profile (US56, US57, US58) and increases the version.
      *
+     * <p>An empty list removes every threshold, as long as no actuation rule depends on them.</p>
+     *
+     * @param newThresholds full set of thresholds that replaces the current one
+     * @param userId        user that makes the change
+     * @param now           moment of the change
      * @throws IllegalArgumentException when a metric is not reported by the configured device, is repeated, or loses
      *                                  the threshold an actuation rule depends on
      */
@@ -119,8 +154,11 @@ public class EnvironmentalProfile extends AbstractDomainAggregateRoot<Environmen
     }
 
     /**
-     * Replaces the actuation rules of a container monitor (US59).
+     * Replaces the actuation rules of a container monitor (US59) and increases the version.
      *
+     * @param rules  full set of rules that replaces the current one; an empty list removes them
+     * @param userId user that makes the change
+     * @param now    moment of the change
      * @throws IllegalArgumentException when the profile is not of a container monitor, a rule is repeated or its
      *                                  metric has no threshold to evaluate the condition
      */
@@ -136,19 +174,29 @@ public class EnvironmentalProfile extends AbstractDomainAggregateRoot<Environmen
     }
 
     /**
-     * Evaluates a value of a metric; empty when the metric has no threshold in this profile.
+     * Evaluates a value of a metric with the threshold configured for it.
+     *
+     * @param metric measured quantity
+     * @param value  numeric value in the unit of the metric
+     * @return the resulting state and the crossed limit; empty when the metric has no threshold in this profile
      */
     public Optional<ThresholdEvaluation> evaluate(MonitoredMetric metric, double value) {
         return thresholds.stream().filter(threshold -> threshold.metric() == metric).findFirst()
                 .map(threshold -> threshold.evaluate(value));
     }
 
+    /**
+     * Metrics that currently have a threshold.
+     */
     private Set<MonitoredMetric> configuredMetrics() {
         var metrics = new HashSet<MonitoredMetric>();
         thresholds.forEach(threshold -> metrics.add(threshold.metric()));
         return metrics;
     }
 
+    /**
+     * Ensures every rule is based on a metric that has a threshold, since the rule reacts to the state it produces.
+     */
     private void requireRulesCovered(List<ActuationRule> rules, Set<MonitoredMetric> metrics) {
         for (var rule : rules) {
             if (!metrics.contains(rule.metric())) {
@@ -157,11 +205,17 @@ public class EnvironmentalProfile extends AbstractDomainAggregateRoot<Environmen
         }
     }
 
+    /**
+     * Device type, as named by Equipment Management, whose metrics this profile accepts.
+     */
     private String deviceKind() {
         return (scope == ProfileScope.ENVIRONMENT ? MonitoredMetric.DeviceKind.ENVIRONMENTAL_DEVICE
                 : MonitoredMetric.DeviceKind.CONTAINER_MONITOR).name();
     }
 
+    /**
+     * Records a change: increases the version and keeps who made it and when.
+     */
     private void touch(Long userId, Instant now) {
         this.version++;
         this.updatedBy = userId;

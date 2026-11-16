@@ -23,6 +23,9 @@ import java.util.List;
 /**
  * Environmental profile stored in {@code environmental_profiles} with its thresholds and actuation rules in child
  * tables.
+ *
+ * <p>The unique {@code environment_id} and {@code device_id} keep a single profile per environment and per container
+ * monitor. The thresholds and rules are loaded eagerly because the profile is always used whole.</p>
  */
 @Getter
 @Setter
@@ -38,17 +41,32 @@ public class EnvironmentalProfilePersistenceEntity extends AuditableAbstractPers
     @Column(nullable = false, length = 30)
     private ProfileScope scope;
 
+    /**
+     * Configured environment; set only for the ENVIRONMENT scope.
+     */
     @Column(unique = true)
     private Long environmentId;
 
+    /**
+     * Configured container monitor; set only for the CONTAINER_MONITOR scope.
+     */
     @Column(unique = true)
     private Long deviceId;
 
+    /**
+     * Configuration version of the domain; it is not a JPA optimistic lock.
+     */
     @Column(nullable = false)
     private Long version;
 
+    /**
+     * User that made the last change of the configuration.
+     */
     private Long configuredBy;
 
+    /**
+     * Moment of the last change of the configuration.
+     */
     private Instant configuredAt;
 
     @ElementCollection(fetch = FetchType.EAGER)

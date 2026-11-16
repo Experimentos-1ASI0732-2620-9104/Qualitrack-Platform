@@ -11,6 +11,10 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Spring Data repository of {@code actuation_events}. The period queries include both ends and are ordered by time
+ * and then by identifier, so actions of the same moment keep their arrival order.
+ */
 public interface ActuationEventPersistenceRepository extends JpaRepository<ActuationEventPersistenceEntity, Long> {
 
     List<ActuationEventPersistenceEntity> findAllByDeviceIdAndOccurredAtBetweenOrderByOccurredAtAscIdAsc(
@@ -22,6 +26,9 @@ public interface ActuationEventPersistenceRepository extends JpaRepository<Actua
     Optional<ActuationEventPersistenceEntity> findFirstByDeviceIdAndActionAndOccurredAt(
             Long deviceId, ActuationAction action, Instant occurredAt);
 
+    /**
+     * @return the creation time of the latest action of the device, or null when it has none
+     */
     @Query("select max(e.createdAt) from ActuationEventPersistenceEntity e where e.deviceId = :deviceId")
     Date findLastCreatedAtByDeviceId(@Param("deviceId") Long deviceId);
 }

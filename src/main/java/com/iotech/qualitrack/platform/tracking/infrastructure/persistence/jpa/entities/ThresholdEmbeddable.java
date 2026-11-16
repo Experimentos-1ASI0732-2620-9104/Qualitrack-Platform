@@ -11,7 +11,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Row of {@code environmental_profile_thresholds}.
+ * Row of {@code environmental_profile_thresholds}: the limits of one metric of a profile, ordered by the
+ * {@code position} column. A null limit means that side of the range is not configured.
  */
 @Getter
 @Setter

@@ -11,6 +11,9 @@ import java.util.List;
 
 /**
  * Implementation of {@link TrackingContextFacade} over the Tracking repositories.
+ *
+ * <p>It does not raise validation errors: missing arguments or a period that ends before it starts return an empty
+ * list, so the calling context does not depend on the validation rules of Tracking.</p>
  */
 @Service
 public class TrackingContextFacadeImpl implements TrackingContextFacade {
@@ -53,10 +56,16 @@ public class TrackingContextFacadeImpl implements TrackingContextFacade {
                 .toList();
     }
 
+    /**
+     * Whether the period is missing or ends before it starts.
+     */
     private static boolean invalid(Instant from, Instant to) {
         return from == null || to == null || to.isBefore(from);
     }
 
+    /**
+     * Translates an action into the reference shared with other contexts, with its enums as names.
+     */
     private static ActuationReference reference(ActuationEvent event) {
         return new ActuationReference(event.getId(), event.getDeviceId(), event.getAction().name(),
                 event.getTriggerMetric() == null ? null : event.getTriggerMetric().name(),

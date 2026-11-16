@@ -10,6 +10,12 @@ import java.util.Optional;
  * Repository of the readings produced by the IoT devices.
  */
 public interface MeasurementRepository {
+
+    /**
+     * Stores a new reading.
+     *
+     * @return the stored reading, with its identifier and reception time
+     */
     Measurement save(Measurement measurement);
 
     /**
@@ -34,5 +40,8 @@ public interface MeasurementRepository {
      */
     List<Measurement> findByEnvironmentAndPeriod(Long laboratoryId, Long environmentId, Instant from, Instant to);
 
+    /**
+     * Moment the platform received the latest reading of a device, used to know whether it is communicating.
+     */
     Optional<Instant> findLastReceivedAt(Long deviceId);
 }

@@ -13,6 +13,8 @@ public final class RecordMeasurementCommandFromResourceAssembler {
 
     /**
      * @param deviceId container monitor, or null for the environmental device of the environment
+     * @return the command that records the reading
+     * @throws IllegalArgumentException when the metric or the moment cannot be read
      */
     public static RecordMeasurementCommand toCommandFromResource(Long laboratoryId, Long environmentId, Long deviceId,
                                                                  RecordMeasurementResource resource) {

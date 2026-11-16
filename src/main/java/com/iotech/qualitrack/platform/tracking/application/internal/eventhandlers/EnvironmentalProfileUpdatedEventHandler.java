@@ -19,6 +19,9 @@ public class EnvironmentalProfileUpdatedEventHandler {
         this.eventPublisher = eventPublisher;
     }
 
+    /**
+     * Translates the domain event into {@link EnvironmentalProfileUpdatedIntegrationEvent} and publishes it.
+     */
     @EventListener(EnvironmentalProfileUpdatedEvent.class)
     public void on(EnvironmentalProfileUpdatedEvent event) {
         log.info("Environmental profile {} updated to version {}", event.profileId(), event.version());

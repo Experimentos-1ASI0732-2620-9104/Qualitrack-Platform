@@ -6,6 +6,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
 
+/**
+ * Spring Data repository of {@code environmental_profiles}; the scope is part of every lookup so an environment and a
+ * device with the same identifier are never confused.
+ */
 public interface EnvironmentalProfilePersistenceRepository
         extends JpaRepository<EnvironmentalProfilePersistenceEntity, Long> {
 

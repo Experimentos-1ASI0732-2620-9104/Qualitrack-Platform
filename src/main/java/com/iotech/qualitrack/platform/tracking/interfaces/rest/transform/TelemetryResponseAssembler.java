@@ -62,6 +62,8 @@ public final class TelemetryResponseAssembler {
 
     /**
      * Metric filter of a query; null when not given.
+     *
+     * @throws IllegalArgumentException when the metric is unknown (400)
      */
     public static MonitoredMetric metric(String value) {
         return TrackingRequestValues.optionalMetric(value);

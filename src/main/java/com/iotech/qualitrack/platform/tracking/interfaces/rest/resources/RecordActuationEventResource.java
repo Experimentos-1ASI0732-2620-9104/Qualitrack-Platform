@@ -5,7 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 
 /**
- * Action executed by a container monitor, synchronized from the Edge.
+ * Action executed by a container monitor, synchronized from the Edge. The cause is optional, but when given it needs
+ * both the trigger metric and the trigger state.
  */
 @Schema(name = "RecordActuationEventRequest", description = "Action executed by the container monitor and its cause")
 public record RecordActuationEventResource(

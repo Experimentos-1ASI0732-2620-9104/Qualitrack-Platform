@@ -9,13 +9,14 @@ import java.util.List;
  */
 @Schema(name = "EnvironmentalProfile", description = "Thresholds and actuation rules in force and their version")
 public record EnvironmentalProfileResource(
-        Long id,
+        @Schema(description = "Environmental profile identifier", example = "4") Long id,
         @Schema(description = "ENVIRONMENT or CONTAINER_MONITOR", example = "CONTAINER_MONITOR") String scope,
-        Long laboratoryId,
+        @Schema(description = "Laboratory that owns the profile", example = "1") Long laboratoryId,
         @Schema(description = "Environment configured, for the ENVIRONMENT scope", nullable = true) Long environmentId,
         @Schema(description = "Container monitor configured, for the CONTAINER_MONITOR scope", nullable = true) Long deviceId,
         @Schema(description = "Configuration version; it increases with every change", example = "3") long version,
-        List<ThresholdResource> thresholds,
+        @Schema(description = "WARNING/CRITICAL limits, at most one per metric") List<ThresholdResource> thresholds,
+        @Schema(description = "Automatic actions; always empty for the ENVIRONMENT scope")
         List<ActuationRuleResource> actuationRules,
         @Schema(description = "Moment of the last change (ISO-8601)", nullable = true) String updatedAt,
         @Schema(description = "User that made the last change", nullable = true) Long updatedBy

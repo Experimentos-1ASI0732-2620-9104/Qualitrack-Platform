@@ -8,6 +8,12 @@ import java.util.Optional;
  * Repository of the environmental profiles.
  */
 public interface EnvironmentalProfileRepository {
+
+    /**
+     * Stores a new profile or the changes of an existing one, with all its thresholds and rules.
+     *
+     * @return the stored profile, with its identifier
+     */
     EnvironmentalProfile save(EnvironmentalProfile profile);
 
     /**
