@@ -8,7 +8,10 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 /**
- * Delivers detected deviations to Compliance &amp; Alerting.
+ * Delivers detected deviations to Compliance &amp; Alerting, which creates the alert of the incident.
+ *
+ * <p>The domain event is translated into an integration event so the other contexts do not depend on the Tracking
+ * domain model.</p>
  */
 @Service
 @Slf4j
@@ -19,6 +22,9 @@ public class EnvironmentalDeviationDetectedEventHandler {
         this.eventPublisher = eventPublisher;
     }
 
+    /**
+     * Logs the deviation as a warning and publishes {@link EnvironmentalDeviationDetectedIntegrationEvent}.
+     */
     @EventListener(EnvironmentalDeviationDetectedEvent.class)
     public void on(EnvironmentalDeviationDetectedEvent event) {
         log.warn("Environmental deviation: device={}, metric={}, value={} {}, state={}, limit={}", event.deviceId(),

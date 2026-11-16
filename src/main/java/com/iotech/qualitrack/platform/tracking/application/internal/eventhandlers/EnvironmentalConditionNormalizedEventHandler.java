@@ -8,7 +8,10 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 /**
- * Delivers the return to normal of a metric to Compliance &amp; Alerting.
+ * Delivers the return to normal of a metric to Compliance &amp; Alerting, which notes it in the open alert.
+ *
+ * <p>The domain event is translated into an integration event so the other contexts do not depend on the Tracking
+ * domain model.</p>
  */
 @Service
 @Slf4j
@@ -19,6 +22,9 @@ public class EnvironmentalConditionNormalizedEventHandler {
         this.eventPublisher = eventPublisher;
     }
 
+    /**
+     * Translates the domain event into {@link EnvironmentalConditionNormalizedIntegrationEvent} and publishes it.
+     */
     @EventListener(EnvironmentalConditionNormalizedEvent.class)
     public void on(EnvironmentalConditionNormalizedEvent event) {
         log.info("Environmental condition back to normal: device={}, metric={}, value={} {}", event.deviceId(),
