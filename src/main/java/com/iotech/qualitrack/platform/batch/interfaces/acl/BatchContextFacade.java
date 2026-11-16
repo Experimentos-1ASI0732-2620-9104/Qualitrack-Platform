@@ -6,8 +6,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface BatchContextFacade {
-    void requireConsumable(Long batchId, Long laboratoryId);
-
     boolean existsBatchById(Long batchId);
 
     boolean belongsToLaboratory(Long batchId, Long laboratoryId);
@@ -17,6 +15,30 @@ public interface BatchContextFacade {
     boolean isBatchRejected(Long batchId);
 
     /**
+     * Finds a product batch, used by the batch report (US96).
+     *
+     * @param batchId the product batch
+     * @return the batch, or empty when it does not exist
+     */
+    Optional<BatchReference> findBatch(Long batchId);
+
+    /**
+     * Product batches of a laboratory, used by the operational counts of the indicators (US93).
+     *
+     * @param laboratoryId the laboratory that owns the batches
+     * @return the batches; empty when the laboratory has none
+     */
+    List<BatchReference> findBatches(Long laboratoryId);
+
+    /**
+     * Raw materials consumed by a batch as they were recorded, also for older batches without environment (US96).
+     *
+     * @param batchId the product batch
+     * @return the usages; empty when the batch has none
+     */
+    List<MaterialUse> findMaterialUses(Long batchId);
+
+    /**
      * Resources that took part in a batch (US80, US96): consumed lots, equipment, staff, container and the quality
      * decision.
      *
@@ -24,6 +46,24 @@ public interface BatchContextFacade {
      * @return the traceability, or empty when the batch does not exist or has no environment (older batches)
      */
     Optional<TraceabilityReference> findTraceability(Long batchId);
+
+    /**
+     * Product batch data shared with other bounded contexts.
+     *
+     * @param laboratoryId the owning laboratory
+     * @param status the status name (PENDING, IN_PROGRESS, RELEASED or REJECTED)
+     * @param startDate the start date, ISO-8601
+     * @param endDate the end date, ISO-8601, or null while the batch is open
+     */
+    record BatchReference(Long id, Long laboratoryId, String batchNumber, String productName, Double quantity,
+                          String unit, String status, String startDate, String endDate, String notes) {
+        /**
+         * @return true when the batch was released
+         */
+        public boolean isReleased() {
+            return "RELEASED".equals(status);
+        }
+    }
 
     /**
      * Traceability of a product batch shared with other bounded contexts.
