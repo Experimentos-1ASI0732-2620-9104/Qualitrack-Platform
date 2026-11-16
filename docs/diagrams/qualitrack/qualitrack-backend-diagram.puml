@@ -55,6 +55,8 @@ package "iam" {
     class UserQueryServiceImpl
     class RoleCommandServiceImpl
     class RoleQueryServiceImpl
+    class UserOnboardingQueryServiceImpl
+    class IamExternalSubscriptionService
     interface PasswordRecoveryCommandService
     class PasswordRecoveryCommandServiceImpl
     interface HashingService
@@ -155,7 +157,6 @@ package "laboratory" {
     class ProductCommandServiceImpl
     class RawMaterialCommandServiceImpl
     class StaffCommandServiceImpl
-    class LaboratoryExternalComplianceService
   }
 
   package "interfaces" {
@@ -193,12 +194,13 @@ package "inventory" {
     class "InventoryContextFacadeImpl" as InvInventoryContextFacadeImpl
     class "InventoryMovementRecorder" as InvInventoryMovementRecorder
     class "InventoryExternalEquipmentService" as InvInventoryExternalEquipmentService
+    class "InventoryExternalLaboratoryService" as InvInventoryExternalLaboratoryService
   }
   package "infrastructure" {
     class "InventoryRepositoryImpl" as InvInventoryRepositoryImpl
-    class "InventoryMaterialEntity" as InvInventoryMaterialEntity
-    class "InventoryReceiptEntity" as InvInventoryReceiptEntity
-    class "InventoryMovementEntity" as InvInventoryMovementEntity
+    class "InventoryMaterialPersistenceEntity" as InvInventoryMaterialEntity
+    class "InventoryReceiptPersistenceEntity" as InvInventoryReceiptEntity
+    class "InventoryMovementPersistenceEntity" as InvInventoryMovementEntity
     interface "InventoryMaterialPersistenceRepository" as InvInventoryMaterialPersistenceRepository
     interface "InventoryReceiptPersistenceRepository" as InvInventoryReceiptPersistenceRepository
     interface "InventoryMovementPersistenceRepository" as InvInventoryMovementPersistenceRepository
@@ -608,7 +610,6 @@ Profile --> Dni
 Profile --> PhoneNumber
 Profile --> Location
 Profile --> ProfilePhoto
-ProfileUpdatedIntegrationEvent ..> StaffRepository : staff name
 UserAccountUpdatedIntegrationEvent ..> StaffRepository : staff e-mail
 
 KpiDashboardController --> RaQueryService
@@ -629,9 +630,8 @@ StripeWebhookController --> ExternalStripeService
 ExternalStripeService --> Stripe
 
 ExternalLabService --> LaboratoryContextFacade
-ExternalLaboratoryService --> LaboratoryContextFacade
+ExternalLaboratoryService --> LaboratoryContextFacade : staff record and rename
 BatchExternalComplianceService --> ComplianceContextFacade
-LaboratoryExternalComplianceService --> ComplianceContextFacade
 TrackingExternalEquipmentService --> EquipmentContextFacade
 InvInventoryExternalEquipmentService --> EquipmentContextFacade : container monitor
 BatchExternalEquipmentService --> EquipmentContextFacade : container monitor
@@ -640,12 +640,14 @@ BatchCommandServiceImpl --> BatchExternalEquipmentService
 CaExternalEquipmentService --> EquipmentContextFacade : device and origin
 CaExternalTrackingService --> TrackingContextFacade : related actions
 TrackingContextFacadeImpl ..|> TrackingContextFacade
-RaExternalLaboratoryService --> LaboratoryContextFacade
-RaExternalEquipmentService --> EquipmentContextFacade : device names
-RaExternalBatchService --> BatchContextFacade : traceability
-RaExternalComplianceService --> ComplianceContextFacade : environment alerts
+RaExternalLaboratoryService --> LaboratoryContextFacade : environments, staff and name
+RaExternalEquipmentService --> EquipmentContextFacade : device names and equipment log
+RaExternalBatchService --> BatchContextFacade : batches and traceability
+RaExternalComplianceService --> ComplianceContextFacade : environment, batch and device alerts
 RaExternalTrackingService --> TrackingContextFacade : readings and actions
 RaExternalInventoryService --> InvInventoryContextFacade : materials and lots
+UserOnboardingQueryServiceImpl --> IamExternalSubscriptionService
+IamExternalSubscriptionService --> SubscriptionContextFacade : subscription access
 
 RawMaterialLowStockIntegrationEvent ..> RawMaterialLowStockComplianceEventHandler
 CalibrationExpiredIntegrationEvent ..> CalibrationExpiredEventHandler
@@ -688,9 +690,9 @@ InvInventoryContextFacadeImpl --> InvInventoryQueryService
 InvInventoryCommandServiceImpl --> InvInventoryRepository
 InvInventoryQueryServiceImpl --> InvInventoryRepository
 InvInventoryImportServiceImpl --> InvInventoryRepository
-InvInventoryImportServiceImpl --> LegacyInventoryFacade
-InvInventoryQueryServiceImpl --> LegacyInventoryFacade
-InvInventoryCommandServiceImpl --> BatchContextFacade : validate and lock batch
+InvInventoryImportServiceImpl --> InvInventoryExternalLaboratoryService
+InvInventoryQueryServiceImpl --> InvInventoryExternalLaboratoryService
+InvInventoryExternalLaboratoryService --> LegacyInventoryFacade : opening balances
 InvInventoryCommandServiceImpl --> InvInventoryMovementRecorder
 InvInventoryImportServiceImpl --> InvInventoryMovementRecorder
 InvInventoryMovementRecorder --> InvInventoryRepository
