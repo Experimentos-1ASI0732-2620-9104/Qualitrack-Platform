@@ -19,6 +19,9 @@ import java.time.Instant;
 
 /**
  * Action of a container monitor stored in {@code actuation_events}.
+ *
+ * <p>The index on device and time serves the period queries and the lookup of re-sent actions. The inherited
+ * {@code created_at} is the moment the platform received the action.</p>
  */
 @Getter
 @Setter
@@ -42,6 +45,9 @@ public class ActuationEventPersistenceEntity extends AuditableAbstractPersistenc
     @Column(nullable = false, length = 30)
     private ActuationAction action;
 
+    /**
+     * Metric that caused the action; null when the device reported no cause.
+     */
     @Enumerated(EnumType.STRING)
     @Column(length = 30)
     private MonitoredMetric triggerMetric;
