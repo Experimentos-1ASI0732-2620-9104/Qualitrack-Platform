@@ -54,7 +54,10 @@ public class ProfileCommandServiceImpl implements ProfileCommandService {
         var profile = current.get();
         var renamed = profile.update(command.fullName(), command.dni(), command.phoneNumber(), command.location());
         var saved = profileRepository.save(profile);
-        if (renamed) eventPublisher.publishEvent(new ProfileUpdatedEvent(saved.getUserId(), saved.getFullNameValue()));
+        if (renamed) {
+            externalLaboratoryService.renameStaffMember(saved.getUserId(), saved.getFullNameValue());
+            eventPublisher.publishEvent(new ProfileUpdatedEvent(saved.getUserId(), saved.getFullNameValue()));
+        }
         return Result.success(saved);
     }
 

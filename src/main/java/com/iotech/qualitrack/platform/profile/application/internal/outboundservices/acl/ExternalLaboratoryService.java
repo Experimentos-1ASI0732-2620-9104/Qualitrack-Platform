@@ -27,6 +27,14 @@ public class ExternalLaboratoryService {
     }
 
     /**
+     * Gives the staff record of the person the full name kept in the profile; nothing changes for an account that is
+     * not a staff member.
+     */
+    public void renameStaffMember(Long userId, String fullName) {
+        laboratoryContextFacade.renameStaffMemberByAccount(userId, fullName);
+    }
+
+    /**
      * @return the staff member of the laboratory, if it exists
      */
     public Optional<StaffMember> findStaffMember(Long laboratoryId, Long staffId) {
