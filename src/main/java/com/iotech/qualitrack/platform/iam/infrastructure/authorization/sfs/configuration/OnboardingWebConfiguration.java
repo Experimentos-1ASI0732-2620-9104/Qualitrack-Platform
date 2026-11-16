@@ -16,9 +16,23 @@ public class OnboardingWebConfiguration implements WebMvcConfigurer {
         this.tenant = tenant;
     }
 
+    /**
+     * Configures onboarding and tenant validation for human users.
+     *
+     * <p>Edge Gateway endpoints are excluded because they use
+     * API key authentication instead of a human IAM account.</p>
+     *
+     * @param registry MVC interceptor registry
+     */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(interceptor).addPathPatterns("/api/v1/**");
-        registry.addInterceptor(tenant).addPathPatterns("/api/v1/**");
+
+        registry.addInterceptor(interceptor)
+                .addPathPatterns("/api/v1/**")
+                .excludePathPatterns("/api/v1/edge-gateways/**");
+
+        registry.addInterceptor(tenant)
+                .addPathPatterns("/api/v1/**")
+                .excludePathPatterns("/api/v1/edge-gateways/**");
     }
 }

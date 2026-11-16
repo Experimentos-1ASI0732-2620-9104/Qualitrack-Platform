@@ -3,7 +3,7 @@ package com.iotech.qualitrack.platform.iam.interfaces.rest;
 import com.iotech.qualitrack.platform.iam.application.commandservices.UserCommandService;
 import com.iotech.qualitrack.platform.iam.domain.model.aggregates.User;
 import com.iotech.qualitrack.platform.iam.domain.model.commands.ChangePasswordCommand;
-import com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.model.UserDetailsImpl;
+import com.iotech.qualitrack.platform.shared.application.security.CurrentUser;
 import com.iotech.qualitrack.platform.iam.interfaces.rest.resources.ChangePasswordResource;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
 import com.iotech.qualitrack.platform.shared.application.result.Result;
@@ -16,7 +16,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
@@ -28,9 +27,11 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 @RequestMapping(value = "/api/v1/users/me/password-changes", produces = APPLICATION_JSON_VALUE)
 public class UserPasswordController {
     private final UserCommandService userCommandService;
+    private final CurrentUser currentUser;
 
-    public UserPasswordController(UserCommandService userCommandService) {
+    public UserPasswordController(UserCommandService userCommandService, CurrentUser currentUser) {
         this.userCommandService = userCommandService;
+        this.currentUser = currentUser;
     }
 
     @PostMapping(consumes = APPLICATION_JSON_VALUE)
@@ -43,9 +44,8 @@ public class UserPasswordController {
                     content = @Content(schema = @Schema(implementation = ErrorResource.class))),
             @ApiResponse(responseCode = "401", description = "Authentication required")
     })
-    public ResponseEntity<?> changePassword(@AuthenticationPrincipal UserDetailsImpl user,
-                                            @Valid @RequestBody ChangePasswordResource resource) {
-        var result = userCommandService.handle(new ChangePasswordCommand(user.getId(), resource.currentPassword(),
+    public ResponseEntity<?> changePassword(@Valid @RequestBody ChangePasswordResource resource) {
+        var result = userCommandService.handle(new ChangePasswordCommand(currentUser.userId(), resource.currentPassword(),
                 resource.newPassword()));
         return switch (result) {
             case Result.Success<User, ApplicationError> success -> ResponseEntity.noContent().build();

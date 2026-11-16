@@ -24,6 +24,10 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import com.iotech.qualitrack.platform.iam.application.internal.queryservices.EdgeGatewayAuthenticationService;
+import com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.pipeline.EdgeGatewayApiKeyAuthenticationFilter;
+
+import org.springframework.core.annotation.Order;
 
 import java.util.List;
 
@@ -90,7 +94,71 @@ public class WebSecurityConfiguration {
         return source;
     }
 
+    /**
+     * Security chain dedicated to Edge Gateway requests.
+     *
+     * <p>Authenticates gateways using X-API-Key without
+     * involving human JWT authentication.</p>
+     *
+     * <p>Only explicitly authorized machine endpoints are
+     * available through this chain.</p>
+     *
+     * @param http Spring Security configuration
+     * @param authenticationService Gateway authentication service
+     * @return dedicated Edge Gateway security chain
+     * @throws Exception when security configuration fails
+     */
     @Bean
+    @Order(1)
+    public SecurityFilterChain edgeGatewaySecurityFilterChain(HttpSecurity http, EdgeGatewayAuthenticationService authenticationService) throws Exception {
+
+        http.securityMatcher("/api/v1/edge-gateways/**").csrf(CsrfConfigurer::disable)
+                .cors(Customizer.withDefaults())
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+                .exceptionHandling(exceptionHandling ->
+                        exceptionHandling
+                                .authenticationEntryPoint(unauthorizedRequestHandlerEntryPoint)
+                                .accessDeniedHandler(forbiddenRequestHandler)
+                )
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(
+                                HttpMethod.OPTIONS,
+                                "/**"
+                        ).permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/edge-gateways/*/iot-devices"
+                        ).hasAuthority("ROLE_EDGE_GATEWAY")
+                        // Synchronize IoT telemetry from an authenticated Gateway.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/edge-gateways/*/iot-devices/*/telemetry-measurements"
+                        ).hasAuthority("ROLE_EDGE_GATEWAY")
+                        // Allow the Gateway to retrieve profiles of its assigned IoT devices.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/edge-gateways/*/iot-devices/*/environmental-profile"
+                        ).hasAuthority("ROLE_EDGE_GATEWAY")
+                        // Allow authenticated Gateways to synchronize actuation events.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/edge-gateways/*/iot-devices/*/actuation-events"
+                        ).hasAuthority("ROLE_EDGE_GATEWAY")
+                        .anyRequest().denyAll()
+                )
+                .addFilterBefore(
+                        new EdgeGatewayApiKeyAuthenticationFilter(authenticationService),
+                        UsernamePasswordAuthenticationFilter.class
+                );
+
+        return http.build();
+    }
+
+
+    @Bean
+    @Order(2)
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             BearerAuthorizationRequestFilter bearerAuthorizationRequestFilter

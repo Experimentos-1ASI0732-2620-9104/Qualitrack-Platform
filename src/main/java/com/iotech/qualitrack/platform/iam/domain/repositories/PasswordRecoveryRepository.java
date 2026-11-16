@@ -16,4 +16,10 @@ public interface PasswordRecoveryRepository {
      * @return its most recent recovery, whatever its status
      */
     Optional<PasswordRecovery> findLatestByUserId(Long userId);
+
+    /**
+     * Same as {@link #findLatestByUserId}, but locks the recovery until the transaction ends, so concurrent
+     * attempts are counted one after another.
+     */
+    Optional<PasswordRecovery> findLatestByUserIdForUpdate(Long userId);
 }
