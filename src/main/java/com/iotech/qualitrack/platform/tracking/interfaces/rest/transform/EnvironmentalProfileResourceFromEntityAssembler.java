@@ -13,6 +13,9 @@ public final class EnvironmentalProfileResourceFromEntityAssembler {
     private EnvironmentalProfileResourceFromEntityAssembler() {
     }
 
+    /**
+     * @return the resource, with the unit of each threshold and the moment of the last change as ISO-8601 text
+     */
     public static EnvironmentalProfileResource toResourceFromEntity(EnvironmentalProfile profile) {
         var thresholds = profile.getThresholds().stream()
                 .map(threshold -> new ThresholdResource(threshold.metric().name(), threshold.unit(), threshold.normalMin(),

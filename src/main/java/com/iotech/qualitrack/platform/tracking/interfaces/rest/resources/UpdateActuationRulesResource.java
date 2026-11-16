@@ -10,5 +10,6 @@ import java.util.List;
  * Full set of actuation rules of a container monitor; it replaces the current one.
  */
 @Schema(name = "UpdateActuationRulesRequest", description = "Rules that replace the current ones; an empty list removes them")
-public record UpdateActuationRulesResource(@NotNull List<@Valid @NotNull ActuationRuleResource> rules) {
+public record UpdateActuationRulesResource(@Schema(description = "Full set of rules; the rules cannot be repeated")
+                                           @NotNull List<@Valid @NotNull ActuationRuleResource> rules) {
 }

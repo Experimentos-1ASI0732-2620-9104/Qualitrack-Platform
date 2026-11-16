@@ -23,6 +23,9 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
  * Connection state of the IoT devices of an environment and the profile each one applies (US55, TS41, TS57).
+ *
+ * <p>It works for both the environmental device and the container monitors, so a client does not need to know the
+ * device type. Every operation needs access to the laboratory.</p>
  */
 @RestController
 @RequestMapping(value = "/api/v1/laboratories/{laboratoryId}/environments/{environmentId}/devices/{deviceId}",
@@ -38,6 +41,11 @@ public class DeviceTrackingController {
         this.expectedCommunicationPeriod = expectedCommunicationPeriod;
     }
 
+    /**
+     * Returns whether the device communicated within the expected period (TS41).
+     *
+     * @return 200 with the status, or 404 when the device is not an IoT device of the environment
+     */
     @GetMapping("/telemetry-status")
     @Operation(summary = "Get the connection status of a device",
             description = "CONNECTED when the environmental device or container monitor communicated within the expected period; otherwise REQUIRES_REVIEW.")
@@ -58,6 +66,11 @@ public class DeviceTrackingController {
                 .orElseGet(() -> ErrorResponseAssembler.toErrorResponseFromApplicationError(ApplicationError.notFound("Device", deviceId)));
     }
 
+    /**
+     * Returns the profile the device applies, as synchronized by the Edge (TS57).
+     *
+     * @return 200 with the profile, or 404 when the device is not in the environment or there is no profile yet
+     */
     @GetMapping("/environmental-profile")
     @Operation(summary = "Get the profile the device applies",
             description = "Configuration the Edge keeps for the device: the profile of the environment for its environmental "

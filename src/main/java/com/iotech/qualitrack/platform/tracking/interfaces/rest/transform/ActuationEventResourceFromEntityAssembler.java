@@ -11,6 +11,9 @@ public final class ActuationEventResourceFromEntityAssembler {
     private ActuationEventResourceFromEntityAssembler() {
     }
 
+    /**
+     * @return the resource, with the enums as names and the moment as ISO-8601 text
+     */
     public static ActuationEventResource toResourceFromEntity(ActuationEvent entity) {
         return new ActuationEventResource(entity.getId(), entity.getDeviceId(), entity.getEnvironmentId(),
                 entity.getAction().name(), entity.getTriggerMetric() == null ? null : entity.getTriggerMetric().name(),

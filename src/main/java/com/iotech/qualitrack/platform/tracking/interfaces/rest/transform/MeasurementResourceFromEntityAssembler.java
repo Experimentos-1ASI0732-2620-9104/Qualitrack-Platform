@@ -11,6 +11,9 @@ public final class MeasurementResourceFromEntityAssembler {
     private MeasurementResourceFromEntityAssembler() {
     }
 
+    /**
+     * @return the resource; the moment falls back to the stored text timestamp for the oldest readings
+     */
     public static MeasurementResource toResourceFromEntity(Measurement entity) {
         return new MeasurementResource(entity.getId(), entity.getEquipmentId(), entity.getEnvironmentId(),
                 entity.getParameterName(), entity.getValue(), entity.getTextValue(), entity.getUnit(),

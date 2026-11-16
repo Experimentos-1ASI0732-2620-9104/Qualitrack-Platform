@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 
 /**
- * Reading synchronized from the Edge.
+ * Reading synchronized from the Edge. Numeric metrics send {@code value}; RFID_TAG sends {@code textValue} instead.
  */
 @Schema(name = "RecordMeasurementRequest", description = "Reading of the environmental device or of a container monitor")
 public record RecordMeasurementResource(

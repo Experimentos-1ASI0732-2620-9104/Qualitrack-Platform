@@ -35,6 +35,8 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 /**
  * Environmental profile and telemetry of an environment, measured by its environmental device
  * (US56, US60, US61, US68, TS42, TS54, TS58).
+ *
+ * <p>Every operation needs access to the laboratory; changing the profile also needs the QA_MANAGER or ADMIN role.</p>
  */
 @RestController
 @RequestMapping(value = "/api/v1/laboratories/{laboratoryId}/environments/{environmentId}", produces = APPLICATION_JSON_VALUE)
@@ -52,6 +54,11 @@ public class EnvironmentTelemetryController {
         this.trackingQueryService = trackingQueryService;
     }
 
+    /**
+     * Returns the profile of the environment.
+     *
+     * @return 200 with the profile, or 404 when it has not been configured
+     */
     @GetMapping("/environmental-profile")
     @Operation(summary = "Get the environmental profile of the environment",
             description = "Air quality thresholds in force and their version.")
@@ -70,6 +77,12 @@ public class EnvironmentTelemetryController {
                         ApplicationError.notFound("EnvironmentalProfile", environmentId)));
     }
 
+    /**
+     * Replaces the air quality thresholds of the environment (TS42).
+     *
+     * @return 200 with the saved profile, or 400 when the limits are not valid or the environment has no
+     * environmental device
+     */
     @PutMapping(value = "/environmental-profile/thresholds", consumes = APPLICATION_JSON_VALUE)
     @PreAuthorize(QUALITY_ROLES)
     @Operation(summary = "Save the thresholds of the environment",
@@ -89,6 +102,11 @@ public class EnvironmentTelemetryController {
                 EnvironmentalProfileResourceFromEntityAssembler::toResourceFromEntity, HttpStatus.OK);
     }
 
+    /**
+     * Records a reading of the environmental device synchronized from the Edge (TS54).
+     *
+     * @return 201 for a new reading, 200 for a reading already received, or 400 when it is not valid
+     */
     @PostMapping(value = "/telemetry-measurements", consumes = APPLICATION_JSON_VALUE)
     @Operation(summary = "Record a reading of the environmental device",
             description = "Synchronizes a reading from the Edge. The platform evaluates it with the profile of the environment "
@@ -111,6 +129,12 @@ public class EnvironmentTelemetryController {
                 MeasurementResourceFromEntityAssembler::toResourceFromEntity);
     }
 
+    /**
+     * Returns the readings of the environmental device in a period, by default the last 24 hours and at most 31 days
+     * (TS58).
+     *
+     * @return 200 with the readings, or 404 when the environment has no environmental device
+     */
     @GetMapping("/telemetry-measurements")
     @Operation(summary = "Get the readings of the environmental device",
             description = "Air quality and motion readings of the period, oldest first. By default the last 24 hours.")

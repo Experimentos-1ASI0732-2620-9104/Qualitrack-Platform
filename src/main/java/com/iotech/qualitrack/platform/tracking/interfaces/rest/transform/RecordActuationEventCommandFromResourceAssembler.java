@@ -11,6 +11,11 @@ public final class RecordActuationEventCommandFromResourceAssembler {
     private RecordActuationEventCommandFromResourceAssembler() {
     }
 
+    /**
+     * @param deviceId container monitor that executed the action
+     * @return the command that records the action
+     * @throws IllegalArgumentException when a name or the moment cannot be read
+     */
     public static RecordActuationEventCommand toCommandFromResource(Long laboratoryId, Long environmentId, Long deviceId,
                                                                     RecordActuationEventResource resource) {
         return new RecordActuationEventCommand(laboratoryId, environmentId, deviceId,
