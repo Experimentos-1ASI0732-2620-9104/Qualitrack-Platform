@@ -11,7 +11,7 @@ import java.time.Instant;
 @Table(name = "inventory_movements", uniqueConstraints =
     @UniqueConstraint(columnNames = {"laboratory_id", "operation_id"}))
 @Getter @Setter
-public class InventoryMovementEntity extends AuditableAbstractPersistenceEntity {
+public class InventoryMovementPersistenceEntity extends AuditableAbstractPersistenceEntity {
     @Column(name = "laboratory_id", nullable = false) private Long laboratoryId;
     @Column(nullable = false) private Long materialId;
     @Column(nullable = false) private Long receiptId;

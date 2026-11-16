@@ -12,7 +12,7 @@ import java.math.BigDecimal;
     @UniqueConstraint(columnNames = {"laboratory_id", "legacy_id"})
 })
 @Getter @Setter
-public class InventoryMaterialEntity extends AuditableAbstractPersistenceEntity {
+public class InventoryMaterialPersistenceEntity extends AuditableAbstractPersistenceEntity {
     @Column(name = "laboratory_id", nullable = false) private Long laboratoryId;
     /** Nullable only for materials registered before environments existed. */
     @Column(name = "environment_id") private Long environmentId;
