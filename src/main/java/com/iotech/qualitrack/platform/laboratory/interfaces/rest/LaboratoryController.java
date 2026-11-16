@@ -35,12 +35,15 @@ public class LaboratoryController {
     private final LaboratoryCommandService laboratoryCommandService;
     private final LaboratoryQueryService laboratoryQueryService;
     private final com.iotech.qualitrack.platform.laboratory.application.commandservices.LaboratoryOnboardingService onboardingService;
+    private final com.iotech.qualitrack.platform.shared.application.security.CurrentUser currentUser;
 
     public LaboratoryController(LaboratoryCommandService laboratoryCommandService, LaboratoryQueryService laboratoryQueryService,
-            com.iotech.qualitrack.platform.laboratory.application.commandservices.LaboratoryOnboardingService onboardingService) {
+            com.iotech.qualitrack.platform.laboratory.application.commandservices.LaboratoryOnboardingService onboardingService,
+            com.iotech.qualitrack.platform.shared.application.security.CurrentUser currentUser) {
         this.laboratoryCommandService = laboratoryCommandService;
         this.laboratoryQueryService = laboratoryQueryService;
         this.onboardingService = onboardingService;
+        this.currentUser = currentUser;
     }
 
     @PostMapping
@@ -50,11 +53,9 @@ public class LaboratoryController {
             @ApiResponse(responseCode = "400", description = "Invalid input data"),
             @ApiResponse(responseCode = "409", description = "Conflict - Laboratory name already exists")
     })
-    public ResponseEntity<?> createLaboratory(@RequestBody CreateLaboratoryResource resource,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal
-            com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.model.UserDetailsImpl user) {
+    public ResponseEntity<?> createLaboratory(@RequestBody CreateLaboratoryResource resource) {
         var command = CreateLaboratoryCommandFromResourceAssembler.toCommandFromResource(resource);
-        var result = Result.<Long, ApplicationError>success(onboardingService.create(user.getId(), command))
+        var result = onboardingService.create(currentUser.userId(), command)
                 .flatMap(laboratoryId -> laboratoryQueryService.handle(new GetLaboratoryByIdQuery(laboratoryId))
                         .<Result<Laboratory, ApplicationError>>map(Result::success)
                         .orElseGet(() -> Result.failure(ApplicationError.notFound("Laboratory", laboratoryId))));

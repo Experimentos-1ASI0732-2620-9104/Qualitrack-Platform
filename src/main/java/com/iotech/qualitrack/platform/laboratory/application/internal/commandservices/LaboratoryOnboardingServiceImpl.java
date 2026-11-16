@@ -2,13 +2,12 @@ package com.iotech.qualitrack.platform.laboratory.application.internal.commandse
 
 import com.iotech.qualitrack.platform.laboratory.application.commandservices.LaboratoryCommandService;
 import com.iotech.qualitrack.platform.laboratory.application.commandservices.LaboratoryOnboardingService;
-
-import com.iotech.qualitrack.platform.iam.interfaces.acl.IamContextFacade;
+import com.iotech.qualitrack.platform.laboratory.application.internal.outboundservices.acl.ExternalIamService;
+import com.iotech.qualitrack.platform.laboratory.application.internal.outboundservices.acl.LaboratoryExternalSubscriptionService;
 import com.iotech.qualitrack.platform.laboratory.domain.model.commands.CreateLaboratoryCommand;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationException;
 import com.iotech.qualitrack.platform.shared.application.result.Result;
-import com.iotech.qualitrack.platform.subscription.interfaces.acl.SubscriptionContextFacade;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,11 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class LaboratoryOnboardingServiceImpl implements LaboratoryOnboardingService {
     private final LaboratoryCommandService commands;
-    private final IamContextFacade users;
-    private final SubscriptionContextFacade subscriptions;
+    private final ExternalIamService users;
+    private final LaboratoryExternalSubscriptionService subscriptions;
 
-    public LaboratoryOnboardingServiceImpl(LaboratoryCommandService commands, IamContextFacade users,
-                                       SubscriptionContextFacade subscriptions) {
+    public LaboratoryOnboardingServiceImpl(LaboratoryCommandService commands, ExternalIamService users,
+                                       LaboratoryExternalSubscriptionService subscriptions) {
         this.commands = commands;
         this.users = users;
         this.subscriptions = subscriptions;
@@ -28,19 +27,20 @@ public class LaboratoryOnboardingServiceImpl implements LaboratoryOnboardingServ
 
     @Transactional
     @Override
-    public Long create(Long userId, CreateLaboratoryCommand command) {
-        if (users.lockLaboratoryAssociation(userId) != null) {
-            throw new ApplicationException(ApplicationError.conflict("Laboratory", "Laboratory setup is already complete"));
+    public Result<Long, ApplicationError> create(Long userId, CreateLaboratoryCommand command) {
+        if (users.lockLaboratoryAssociation(userId)) {
+            return Result.failure(ApplicationError.conflict("Laboratory", "Laboratory setup is already complete"));
         }
-        if (!subscriptions.getAccess(userId, null).active()) {
-            throw new ApplicationException(ApplicationError.businessRuleViolation("subscription", "An active subscription is required"));
+        if (!subscriptions.hasActiveSubscription(userId)) {
+            return Result.failure(ApplicationError.businessRuleViolation("subscription", "An active subscription is required"));
         }
         var laboratoryId = switch (commands.handle(command)) {
             case Result.Success<Long, ApplicationError> success -> success.value();
+            // Raised so that a laboratory saved before the failure is rolled back with the rest of the setup.
             case Result.Failure<Long, ApplicationError> failure -> throw new ApplicationException(failure.error());
         };
         users.assignLaboratory(userId, laboratoryId);
         subscriptions.assignLaboratory(userId, laboratoryId);
-        return laboratoryId;
+        return Result.success(laboratoryId);
     }
 }
