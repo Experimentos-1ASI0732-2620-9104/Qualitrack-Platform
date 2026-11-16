@@ -11,7 +11,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * JPA adapter implementation for the {@link AuditReportRepository} domain port.
+ * JPA adapter for the {@link AuditReportRepository} port.
+ * Exposes queries by laboratory, batch, equipment and report type, plus saving.
+ * All domain <-> persistence conversion is delegated to {@link AuditReportPersistenceAssembler}
+ * to keep this adapter free of mapping logic.
  */
 @Repository
 public class AuditReportRepositoryImpl implements AuditReportRepository {
@@ -28,6 +31,7 @@ public class AuditReportRepositoryImpl implements AuditReportRepository {
                 .map(AuditReportPersistenceAssembler::toDomainFromPersistence);
     }
 
+    /** Lists reports generated for a laboratory (source for the laboratory "Reports" view). */
     @Override
     public List<AuditReport> findAllByLaboratoryId(Long laboratoryId) {
         return persistenceRepository.findAllByLaboratoryId(laboratoryId).stream()
@@ -35,6 +39,7 @@ public class AuditReportRepositoryImpl implements AuditReportRepository {
                 .toList();
     }
 
+    /** Lists reports attached to a specific batch (batch traceability). */
     @Override
     public List<AuditReport> findAllByBatchId(Long batchId) {
         return persistenceRepository.findAllByBatchId(batchId).stream()
@@ -42,6 +47,7 @@ public class AuditReportRepositoryImpl implements AuditReportRepository {
                 .toList();
     }
 
+    /** Lists reports attached to an equipment (activity audit). */
     @Override
     public List<AuditReport> findAllByEquipmentId(Long equipmentId) {
         return persistenceRepository.findAllByEquipmentId(equipmentId).stream()
@@ -49,6 +55,7 @@ public class AuditReportRepositoryImpl implements AuditReportRepository {
                 .toList();
     }
 
+    /** Lists reports of a functional type (e.g. INVENTORY, COMPLIANCE, EQUIPMENT_LOG). */
     @Override
     public List<AuditReport> findAllByReportType(ReportType reportType) {
         return persistenceRepository.findAllByReportType(reportType).stream()
@@ -56,6 +63,7 @@ public class AuditReportRepositoryImpl implements AuditReportRepository {
                 .toList();
     }
 
+    /** Saves or updates report metadata; binary content lives in {@code ReportDocumentRepository}. */
     @Override
     public AuditReport save(AuditReport auditReport) {
         var entity = AuditReportPersistenceAssembler.toPersistenceFromDomain(auditReport);

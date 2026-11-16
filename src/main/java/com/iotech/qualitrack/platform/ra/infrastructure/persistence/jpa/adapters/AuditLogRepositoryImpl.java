@@ -11,11 +11,16 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * JPA adapter implementation for the {@link AuditLogRepository} domain port.
+ * JPA adapter for the {@link AuditLogRepository} port.
+ * Translates between the {@link AuditLogEntry} domain model and the persistence entity
+ * via {@link AuditLogEntryPersistenceAssembler}. No business rules live here:
+ * this class only orchestrates queries and mappings.
  */
 @Repository
 public class AuditLogRepositoryImpl implements AuditLogRepository {
 
+    // Discriminator constants used in ENTITY_TYPE/ENTITY_ID columns.
+    // Kept as Strings to avoid coupling the persistence package to domain enums.
     private static final String EQUIPMENT_ENTITY_TYPE = "EQUIPMENT";
     private static final String BATCH_ENTITY_TYPE = "BATCH";
 
@@ -38,6 +43,10 @@ public class AuditLogRepositoryImpl implements AuditLogRepository {
                 .toList();
     }
 
+    /**
+     * Search by equipment: filters by (ENTITY_TYPE = EQUIPMENT, ENTITY_ID = equipmentId).
+     * Backed by a derived query in the underlying Spring Data repository.
+     */
     @Override
     public List<AuditLogEntry> findAllByEquipmentId(Long equipmentId) {
         return persistenceRepository.findAllByEntityTypeAndEntityId(EQUIPMENT_ENTITY_TYPE, equipmentId).stream()
@@ -45,6 +54,10 @@ public class AuditLogRepositoryImpl implements AuditLogRepository {
                 .toList();
     }
 
+
+    /**
+     * Search by batch: filters by (ENTITY_TYPE = BATCH, ENTITY_ID = batchId).
+     */
     @Override
     public List<AuditLogEntry> findAllByBatchId(Long batchId) {
         return persistenceRepository.findAllByEntityTypeAndEntityId(BATCH_ENTITY_TYPE, batchId).stream()
@@ -66,6 +79,11 @@ public class AuditLogRepositoryImpl implements AuditLogRepository {
                 .toList();
     }
 
+    /**
+     * Search by date range over the timestamp stored as ISO-8601 String.
+     * Relies on the lexicographic ordering of ISO-8601 so BETWEEN comparison is
+     * equivalent to a temporal comparison.
+     */
     @Override
     public List<AuditLogEntry> findAllByDateRange(String dateFrom, String dateTo) {
         return persistenceRepository.findAllByTimestampBetween(dateFrom, dateTo).stream()
@@ -73,6 +91,7 @@ public class AuditLogRepositoryImpl implements AuditLogRepository {
                 .toList();
     }
 
+    /** Combined variant: EQUIPMENT entity + date range. */
     @Override
     public List<AuditLogEntry> findAllByEquipmentIdAndDateRange(Long equipmentId, String dateFrom, String dateTo) {
         return persistenceRepository
@@ -87,6 +106,7 @@ public class AuditLogRepositoryImpl implements AuditLogRepository {
                 .toList();
     }
 
+    /** Combined variant: BATCH entity + date range. */
     @Override
     public List<AuditLogEntry> findAllByBatchIdAndDateRange(Long batchId, String dateFrom, String dateTo) {
         return persistenceRepository
@@ -101,6 +121,10 @@ public class AuditLogRepositoryImpl implements AuditLogRepository {
                 .toList();
     }
 
+    /**
+     * Persists an entry: maps domain -> entity, saves and returns the entity mapped
+     * back to domain (needed because JPA may assign id/timestamp on save).
+     */
     @Override
     public AuditLogEntry save(AuditLogEntry auditLogEntry) {
         var entity = AuditLogEntryPersistenceAssembler.toPersistenceFromDomain(auditLogEntry);
