@@ -28,7 +28,6 @@ package "spring and java.time" <<External>> {
   abstract class Clock
 }
 package "batch" <<External>> {
-  interface BatchContextFacade
   class ReceiptConsumedEventHandler
   interface RawMaterialUsageRepository
 }
@@ -169,7 +168,7 @@ package "inventory.application" as Inventoryapplication {
       +handle(ConsumeRawMaterialBatchCommand): Result
     }
     interface InventoryImportService {
-      +handle(ImportLegacyRawMaterialCommand): Long
+      +handle(ImportLegacyRawMaterialCommand): Result<Long, ApplicationError>
     }
   }
   
@@ -182,9 +181,12 @@ package "inventory.application" as Inventoryapplication {
     class InventoryMovementRecorder
     class InventoryExternalLaboratoryService {
       +findEnvironment(laboratoryId, environmentId): Optional<EnvironmentReference>
+      +findLegacyMaterials(laboratoryId): List<LegacyRawMaterial>
+      +lockLegacyMaterial(laboratoryId, legacyId): LegacyRawMaterial
     }
     class InventoryExternalEquipmentService {
       +findContainerMonitor(laboratoryId, deviceId): Optional<ContainerReference>
+      +findContainerName(laboratoryId, deviceId): Optional<String>
     }
   }
   
@@ -194,7 +196,7 @@ package "inventory.application" as Inventoryapplication {
   
   package "inventory.application.queryservices" {
     interface InventoryQueryService {
-      +handle(GetPendingLegacyMaterialsQuery): List<LegacyInventoryFacade.Material>
+      +handle(GetPendingLegacyMaterialsQuery): List<LegacyRawMaterial>
       +handle(GetEnvironmentRawMaterialsQuery): List<MaterialStockSummary>
       +handle(GetEnvironmentRawMaterialByIdQuery): Optional<MaterialStockSummary>
       +handle(GetRawMaterialBatchesQuery): List<RawMaterialBatch>
@@ -336,6 +338,17 @@ package "inventory.domain" as Inventorydomain {
   }
   
   package "inventory.domain.model.valueobjects" {
+    class LegacyRawMaterial <<record>> {
+      +id: Long
+      +code: String
+      +name: String
+      +unit: String
+      +minimumStock: BigDecimal
+      +supplier: String
+      +batchNumber: String
+      +expiresOn: String
+      +balance: BigDecimal
+    }
     class MaterialStockSummary <<record>> {
       +id: Long
       +laboratoryId: Long
@@ -414,7 +427,7 @@ package "inventory.infrastructure" as Inventoryinfrastructure {
   }
   
   package "inventory.infrastructure.persistence.jpa.entities" {
-    class InventoryMaterialEntity {
+    class InventoryMaterialPersistenceEntity {
       -laboratoryId: Long
       -legacyId: Long
       -code: String
@@ -422,7 +435,7 @@ package "inventory.infrastructure" as Inventoryinfrastructure {
       -unit: String
       -minimumStock: BigDecimal
     }
-    class InventoryMovementEntity {
+    class InventoryMovementPersistenceEntity {
       -laboratoryId: Long
       -materialId: Long
       -receiptId: Long
@@ -439,7 +452,7 @@ package "inventory.infrastructure" as Inventoryinfrastructure {
       -occurredAt: Instant
       -operationId: String
     }
-    class InventoryReceiptEntity {
+    class InventoryReceiptPersistenceEntity {
       -laboratoryId: Long
       -materialId: Long
       -supplier: String
@@ -479,17 +492,14 @@ InventoryQueryServiceImpl ..|> InventoryQueryService
 InventoryContextFacadeImpl ..|> InventoryContextFacade
 InventoryRepositoryImpl ..|> InventoryRepository
 InventoryCommandServiceImpl --> InventoryRepository
-InventoryCommandServiceImpl --> BatchContextFacade : validate and lock
 InventoryCommandServiceImpl --> InventoryMovementRecorder
 InventoryCommandServiceImpl --> ApplicationEventPublisher
 InventoryCommandServiceImpl --> Clock
 InventoryCommandServiceImpl ..> ReceiptConsumedIntegrationEvent : publishes
 InventoryImportServiceImpl --> InventoryRepository
-InventoryImportServiceImpl --> LegacyInventoryFacade : lock opening balance
 InventoryImportServiceImpl --> InventoryMovementRecorder
 InventoryImportServiceImpl --> Clock
 InventoryQueryServiceImpl --> InventoryRepository
-InventoryQueryServiceImpl --> LegacyInventoryFacade
 InventoryQueryServiceImpl --> Clock
 InventoryQueryServiceImpl ..> MaterialStockSummary
 InventoryMovementRecorder --> InventoryRepository
@@ -517,26 +527,26 @@ InventoryCommandService ..> ReceiveRawMaterialBatchCommand
 InventoryCommandService ..> ReviewRawMaterialBatchCommand
 InventoryCommandService ..> SaveRawMaterialCommand
 InventoryQueryService ..> GetPendingLegacyMaterialsQuery
-InventoryMaterialEntity --|> AuditableAbstractPersistenceEntity
+InventoryMaterialPersistenceEntity --|> AuditableAbstractPersistenceEntity
 InventoryMaterialPersistenceRepository --|> JpaRepository
-InventoryMaterialPersistenceRepository ..> InventoryMaterialEntity
+InventoryMaterialPersistenceRepository ..> InventoryMaterialPersistenceEntity
 InventoryRepositoryImpl --> InventoryMaterialPersistenceRepository
 InventoryRepositoryImpl --> InventoryMaterialPersistenceAssembler
-InventoryMaterialPersistenceAssembler ..> InventoryMaterialEntity
+InventoryMaterialPersistenceAssembler ..> InventoryMaterialPersistenceEntity
 InventoryMaterialPersistenceAssembler ..> RawMaterial
-InventoryReceiptEntity --|> AuditableAbstractPersistenceEntity
+InventoryReceiptPersistenceEntity --|> AuditableAbstractPersistenceEntity
 InventoryReceiptPersistenceRepository --|> JpaRepository
-InventoryReceiptPersistenceRepository ..> InventoryReceiptEntity
+InventoryReceiptPersistenceRepository ..> InventoryReceiptPersistenceEntity
 InventoryRepositoryImpl --> InventoryReceiptPersistenceRepository
 InventoryRepositoryImpl --> InventoryReceiptPersistenceAssembler
-InventoryReceiptPersistenceAssembler ..> InventoryReceiptEntity
+InventoryReceiptPersistenceAssembler ..> InventoryReceiptPersistenceEntity
 InventoryReceiptPersistenceAssembler ..> RawMaterialBatch
-InventoryMovementEntity --|> AuditableAbstractPersistenceEntity
+InventoryMovementPersistenceEntity --|> AuditableAbstractPersistenceEntity
 InventoryMovementPersistenceRepository --|> JpaRepository
-InventoryMovementPersistenceRepository ..> InventoryMovementEntity
+InventoryMovementPersistenceRepository ..> InventoryMovementPersistenceEntity
 InventoryRepositoryImpl --> InventoryMovementPersistenceRepository
 InventoryRepositoryImpl --> InventoryMovementPersistenceAssembler
-InventoryMovementPersistenceAssembler ..> InventoryMovementEntity
+InventoryMovementPersistenceAssembler ..> InventoryMovementPersistenceEntity
 InventoryMovementPersistenceAssembler ..> InventoryMovement
 InventoryMovementResourceFromEntityAssembler ..> InventoryMovement
 InventoryMovementResourceFromEntityAssembler ..> InventoryMovementResource
@@ -563,6 +573,8 @@ EnvironmentInventoryController --> InventoryCommandService
 EnvironmentInventoryController --> InventoryQueryService
 EnvironmentInventoryController --> InventoryImportService
 InventoryExternalLaboratoryService --> LaboratoryContextFacade
+InventoryExternalLaboratoryService --> LegacyInventoryFacade : lock opening balance
+InventoryExternalLaboratoryService ..> LegacyRawMaterial
 InventoryCommandServiceImpl --> InventoryExternalLaboratoryService
 InventoryQueryServiceImpl --> InventoryExternalLaboratoryService
 InventoryImportServiceImpl --> InventoryExternalLaboratoryService

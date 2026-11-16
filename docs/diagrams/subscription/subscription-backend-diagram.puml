@@ -102,7 +102,7 @@ package "subscription.domain.model.commands" {
 
   class RecordStripePaymentCommand <<record>> {
     +subscriptionId: Long
-    +stripePaymentIntentId: String
+    +providerPaymentId: String
     +stripeCheckoutSessionId: String
     +amount: BigDecimal
     +currency: String
@@ -182,7 +182,7 @@ package "subscription.domain.model.entities" {
     -amount: Money
     -status: PaymentStatus
     -paidAt: String
-    +stripePayment(subscriptionId: Long, stripePaymentIntentId: String, stripeCheckoutSessionId: String, amount: Money, status: PaymentStatus, paidAt: String): SubscriptionPayment
+    +stripePayment(subscriptionId: Long, providerPaymentId: String, stripeCheckoutSessionId: String, amount: Money, status: PaymentStatus, paidAt: String): SubscriptionPayment
     +isPaid(): boolean
   }
 }
@@ -298,6 +298,11 @@ package "subscription.application.queryservices" {
 package "subscription.application.internal.commandservices" {
   class SubscriptionCommandServiceImpl
   class SubscriptionPlanCommandServiceImpl
+  class StripeWebhookService {
+    +fulfill(session: StripeSession): void
+    +synchronize(stripeSubscriptionId: String): void
+    +recordRenewalPayment(invoice: StripeInvoice): void
+  }
 }
 
 package "subscription.application.internal.queryservices" {
@@ -332,7 +337,15 @@ package "subscription.infrastructure.configuration" {
   }
 }
 
+package "iam.interfaces.acl" <<External>> {
+  class IamContextFacade
+}
+
 package "subscription.application.internal.outboundservices.acl" {
+  class SubscriptionExternalIamService {
+    +lockLaboratoryAssociation(userId: Long): Long
+  }
+
   class ExternalStripeService {
     -stripeSecretKey: String
     +createCheckoutSession(command: CreateCheckoutSessionCommand, stripePriceId: String): StripeCheckoutSessionResult
@@ -460,11 +473,21 @@ package "subscription.infrastructure.persistence.jpa.converters" {
   class PaymentStatusPersistenceConverter
 }
 
+package "subscription.application.acl" {
+  class SubscriptionContextFacadeImpl
+}
+
 package "subscription.interfaces.acl" {
-  class SubscriptionContextFacade {
+  interface SubscriptionContextFacade {
+    +getAccess(userId: Long, laboratoryId: Long): SubscriptionAccess
+    +assignLaboratory(userId: Long, laboratoryId: Long): void
     +hasActiveSubscription(laboratoryId: Long): boolean
-    +hasActivePlan(laboratoryId: Long, planCode: PlanCode): boolean
+    +hasActivePlan(laboratoryId: Long, planCode: String): boolean
     +getActivePlanCode(laboratoryId: Long): String
+  }
+  class SubscriptionAccess <<record>> {
+    +subscriptionId: Long
+    +active: boolean
   }
 }
 
@@ -580,6 +603,7 @@ package "subscription.interfaces.rest" {
 package "external.stripe" {
   class StripeSession
   class StripeSubscription
+  class StripeInvoice
   class Webhook
 }
 
@@ -637,6 +661,11 @@ SubscriptionQueryServiceImpl --> SubscriptionRepository
 SubscriptionQueryServiceImpl --> SubscriptionPlanRepository
 SubscriptionQueryServiceImpl --> SubscriptionPaymentRepository
 
+SubscriptionExternalIamService --> IamContextFacade
+note bottom of SubscriptionExternalIamService
+  The Stripe webhook locks the account to serialize the activation
+  and synchronization of its subscription.
+end note
 ExternalStripeService ..> StripeCheckoutSessionResult
 ExternalStripeService ..> StripeSubscriptionDetails
 ExternalStripeService ..> StripeSession
@@ -677,7 +706,10 @@ SubscriptionPaymentPersistenceAssembler ..> SubscriptionPaymentPersistenceEntity
 MoneyPersistenceAssembler ..> Money
 MoneyPersistenceAssembler ..> MoneyEmbeddable
 
-SubscriptionContextFacade --> SubscriptionQueryService
+SubscriptionContextFacadeImpl ..|> SubscriptionContextFacade
+SubscriptionContextFacadeImpl --> SubscriptionQueryService
+SubscriptionContextFacadeImpl --> SubscriptionRepository
+SubscriptionContextFacade ..> SubscriptionAccess
 
 CheckoutSessionCreatedEventHandler ..> CheckoutSessionCreatedEvent
 CheckoutSessionCreatedEventHandler ..> CheckoutSessionCreatedIntegrationEvent
@@ -710,13 +742,25 @@ note bottom of SubscriptionController
   currentPeriodEnd and Stripe ends it then (US23); 409 when not active or already cancelled.
 end note
 
-StripeWebhookController --> SubscriptionCommandService
-StripeWebhookController --> SubscriptionQueryService
-StripeWebhookController --> ExternalStripeService
-StripeWebhookController ..> ActivateSubscriptionCommand
-StripeWebhookController ..> RecordStripePaymentCommand
+StripeWebhookController --> StripeWebhookService
 StripeWebhookController ..> Webhook
 StripeWebhookController ..> StripeSession
+StripeWebhookController ..> StripeSubscription
+StripeWebhookController ..> StripeInvoice
+StripeWebhookService --> SubscriptionCommandService
+StripeWebhookService --> SubscriptionRepository
+StripeWebhookService --> SubscriptionPaymentRepository
+StripeWebhookService --> ExternalStripeService
+StripeWebhookService --> SubscriptionExternalIamService : locks the account
+StripeWebhookService ..> ActivateSubscriptionCommand
+StripeWebhookService ..> RecordStripePaymentCommand
+note bottom of StripeWebhookService
+  checkout.session.completed / async_payment_succeeded: fulfill activates the
+  subscription and records the first payment (checkout session).
+  customer.subscription.updated / deleted: synchronize keeps period, status and renewal.
+  invoice.paid with billing_reason subscription_cycle: recordRenewalPayment records
+  the renewal once per invoice (providerPaymentId = invoice id), dated status_transitions.paid_at.
+end note
 
 CreateCheckoutSessionCommandFromResourceAssembler ..> CreateCheckoutSessionResource
 CreateCheckoutSessionCommandFromResourceAssembler ..> CreateCheckoutSessionCommand

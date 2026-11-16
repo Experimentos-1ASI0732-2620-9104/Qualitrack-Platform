@@ -32,6 +32,7 @@ package "laboratory.interfaces.acl" <<External>> {
   interface LaboratoryContextFacade {
     + findStaffMember(laboratoryId, staffId): Optional<StaffReference>
     + findStaffMemberByAccount(userId: Long): Optional<StaffReference>
+    + renameStaffMemberByAccount(userId: Long, fullName: String): void
   }
 }
 
@@ -202,6 +203,7 @@ package "profile.application.internal.outboundservices.acl" {
   class ExternalLaboratoryService {
     + findStaffMemberByAccount(userId: Long): Optional<StaffMember>
     + findStaffMember(laboratoryId, staffId): Optional<StaffMember>
+    + renameStaffMember(userId: Long, fullName: String): void
   }
 }
 
@@ -232,7 +234,7 @@ ProfileCommandServiceImpl ..|> ProfileCommandService
 ProfileCommandServiceImpl --> ProfileRepository
 ProfileCommandServiceImpl --> ProfilePhotoStorage
 ProfileCommandServiceImpl --> ExternalIamService
-ProfileCommandServiceImpl --> ExternalLaboratoryService : registered name
+ProfileCommandServiceImpl --> ExternalLaboratoryService : registered name, staff rename
 ProfileCommandServiceImpl --> ApplicationEventPublisher
 ProfileCommandServiceImpl ..> ProfileUpdatedEvent : full name changed
 ProfileQueryServiceImpl ..|> ProfileQueryService
@@ -251,17 +253,23 @@ package "profile.interfaces.events" {
 
 ProfileUpdatedEventHandler ..> ProfileUpdatedIntegrationEvent
 note bottom of ProfileUpdatedIntegrationEvent
-  Laboratory renames the staff member
-  of the account (staff list).
+  Published when the full name changes, after the
+  staff member of the account is renamed through
+  the Laboratory facade.
 end note
 
+package "profile.application.acl" {
+  class ProfileContextFacadeImpl
+}
+
 package "profile.interfaces.acl" {
-  class ProfileContextFacade {
+  interface ProfileContextFacade {
     + displayNameOf(userId: Long): String
   }
 }
 
-ProfileContextFacade --> ProfileQueryService
+ProfileContextFacadeImpl ..|> ProfileContextFacade
+ProfileContextFacadeImpl --> ProfileQueryService
 note bottom of ProfileContextFacade
   Full name, or the username until the profile is completed:
   Compliance uses it in the notifications ("acknowledged by ...").
