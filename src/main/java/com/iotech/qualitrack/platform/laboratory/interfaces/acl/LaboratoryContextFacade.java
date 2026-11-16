@@ -19,6 +19,14 @@ public interface LaboratoryContextFacade {
     boolean existsLaboratoryById(Long labId);
 
     /**
+     * Finds the name of a laboratory, shown in the header of its reports.
+     *
+     * @param laboratoryId the laboratory identifier
+     * @return the name, or empty when the laboratory does not exist
+     */
+    Optional<String> findLaboratoryName(Long laboratoryId);
+
+    /**
      * Verifies if an environment exists and belongs to the given laboratory.
      *
      * @param laboratoryId the laboratory that must own the environment
@@ -78,6 +86,14 @@ public interface LaboratoryContextFacade {
      * @return the staff member that signs in with the account, if it is one
      */
     Optional<StaffReference> findStaffMemberByAccount(Long userId);
+
+    /**
+     * Gives the staff member that signs in with the account the full name kept in its profile.
+     *
+     * @param userId the account
+     * @param fullName the full name of the profile
+     */
+    void renameStaffMemberByAccount(Long userId, String fullName);
 
     /**
      * Staff data shared with other bounded contexts.
