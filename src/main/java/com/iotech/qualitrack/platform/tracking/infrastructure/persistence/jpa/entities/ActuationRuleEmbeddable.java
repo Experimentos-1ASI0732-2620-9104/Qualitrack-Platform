@@ -13,7 +13,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Row of {@code environmental_profile_actuation_rules}.
+ * Row of {@code environmental_profile_actuation_rules}: one actuation rule of a container monitor profile, ordered
+ * by the {@code position} column.
  */
 @Getter
 @Setter

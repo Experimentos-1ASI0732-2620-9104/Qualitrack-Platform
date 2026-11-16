@@ -5,6 +5,8 @@ import com.iotech.qualitrack.platform.inventory.domain.model.queries.GetPendingL
 import com.iotech.qualitrack.platform.inventory.interfaces.rest.resources.LegacyMaterialResource;
 import com.iotech.qualitrack.platform.inventory.interfaces.rest.transform.LegacyMaterialResourceFromEntityAssembler;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +34,12 @@ public class InventoryController {
 
     @GetMapping("/legacy-materials")
     @Operation(summary = "Preview pre-Inventory records pending explicit import into an environment")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Pending legacy raw materials retrieved successfully."),
+            @ApiResponse(responseCode = "400", description = "Invalid laboratory identifier."),
+            @ApiResponse(responseCode = "401", description = "Authentication is required to access this resource."),
+            @ApiResponse(responseCode = "403", description = "The authenticated user does not have permission to access the specified laboratory.")
+    })
     public List<LegacyMaterialResource> pending(@PathVariable Long laboratoryId) {
         return queries.handle(new GetPendingLegacyMaterialsQuery(laboratoryId)).stream()
                 .map(LegacyMaterialResourceFromEntityAssembler::toResourceFromEntity).toList();

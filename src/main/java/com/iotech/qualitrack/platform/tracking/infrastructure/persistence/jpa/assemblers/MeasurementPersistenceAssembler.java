@@ -14,6 +14,9 @@ public final class MeasurementPersistenceAssembler {
     private MeasurementPersistenceAssembler() {
     }
 
+    /**
+     * @return the domain reading, with the creation time of the row as reception time; null for a null entity
+     */
     public static Measurement toDomainFromPersistence(MeasurementPersistenceEntity entity) {
         if (entity == null) return null;
         return new Measurement(entity.getId(), entity.getLaboratoryId(), entity.getEnvironmentId(),
@@ -24,6 +27,9 @@ public final class MeasurementPersistenceAssembler {
                 entity.getCreatedAt() == null ? null : entity.getCreatedAt().toInstant());
     }
 
+    /**
+     * @return a new entity; the audit columns are filled by JPA when it is saved; null for a null reading
+     */
     public static MeasurementPersistenceEntity toPersistenceFromDomain(Measurement measurement) {
         if (measurement == null) return null;
         var entity = new MeasurementPersistenceEntity();
@@ -45,6 +51,8 @@ public final class MeasurementPersistenceAssembler {
 
     /**
      * Readings stored before the measurement time column existed only kept the text timestamp.
+     *
+     * @return the parsed moment, or null when the text is missing or not an ISO-8601 instant
      */
     private static Instant parse(String timestamp) {
         if (timestamp == null) return null;

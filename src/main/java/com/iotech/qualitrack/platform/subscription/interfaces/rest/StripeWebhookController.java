@@ -3,6 +3,7 @@ package com.iotech.qualitrack.platform.subscription.interfaces.rest;
 import com.iotech.qualitrack.platform.subscription.application.internal.commandservices.StripeWebhookService;
 import com.iotech.qualitrack.platform.subscription.interfaces.rest.resources.StripeWebhookResource;
 import com.stripe.exception.SignatureVerificationException;
+import com.stripe.model.Invoice;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,7 +25,9 @@ public class StripeWebhookController {
     @PostMapping(consumes = "application/json")
     @Operation(summary = "Process Stripe webhook",
             description = "Requires Stripe-Signature over the unmodified body. Only paid checkout sessions "
-                    + "with an active Stripe subscription grant access. Failures return 500 for provider retry.")
+                    + "with an active Stripe subscription grant access; customer.subscription.updated and "
+                    + "customer.subscription.deleted keep its period and status, and invoice.paid records the "
+                    + "payment of each renewal. Failures return 500 for provider retry.")
     public ResponseEntity<StripeWebhookResource> handleStripeWebhook(
             @RequestBody String payload, @RequestHeader("Stripe-Signature") String signature) {
         if (secret.isBlank()) return ResponseEntity.status(503).body(new StripeWebhookResource("not-configured"));
@@ -43,6 +46,10 @@ public class StripeWebhookController {
             } else if ("customer.subscription.updated".equals(type) || "customer.subscription.deleted".equals(type)) {
                 var object = event.getDataObjectDeserializer().deserializeUnsafe();
                 if (object instanceof com.stripe.model.Subscription subscription) service.synchronize(subscription.getId());
+            } else if ("invoice.paid".equals(type)) {
+                var object = event.getDataObjectDeserializer().deserializeUnsafe();
+                if (!(object instanceof Invoice invoice)) throw new IllegalArgumentException("Invalid invoice payload");
+                service.recordRenewalPayment(invoice);
             }
             return ResponseEntity.ok(new StripeWebhookResource("processed"));
         } catch (Exception exception) {

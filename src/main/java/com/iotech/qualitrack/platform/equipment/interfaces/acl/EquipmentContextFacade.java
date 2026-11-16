@@ -1,5 +1,6 @@
 package com.iotech.qualitrack.platform.equipment.interfaces.acl;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,6 +17,51 @@ public interface EquipmentContextFacade {
      * @return the equipment, or empty when it does not exist in the laboratory
      */
     Optional<EquipmentReference> findEquipment(Long laboratoryId, Long equipmentId);
+
+    /**
+     * Finds an Edge Gateway registered within a laboratory.
+     *
+     * <p>Only equipment classified as EDGE_GATEWAY with
+     * a valid external identifier is returned.</p>
+     *
+     * @param laboratoryId laboratory that owns the Gateway
+     * @param equipmentId Gateway equipment identifier
+     * @return the Gateway reference, or empty when not found
+     *         or when the equipment is not an Edge Gateway
+     */
+    Optional<EdgeGatewayReference> findEdgeGateway(
+            Long laboratoryId,
+            Long equipmentId
+    );
+
+    /**
+     * Finds an Edge Gateway using its unique external identifier.
+     *
+     * <p>This operation is intended for machine authentication
+     * without requiring the Gateway to provide its laboratory
+     * or numeric equipment identifier.</p>
+     *
+     * @param sensorExternalId unique external Gateway identifier
+     * @return the Gateway reference, or empty when not found
+     *         or when the equipment is not an Edge Gateway
+     */
+    Optional<EdgeGatewayReference> findEdgeGatewayByExternalId(
+            String sensorExternalId
+    );
+
+    /**
+     * Whether an Edge Gateway serves an IoT device of its environment.
+     *
+     * <p>The devices of an environment are distributed among its operational Gateways, 15 at most each, so a Gateway
+     * serves only its share of them, the same devices it reads from its device registry.</p>
+     *
+     * @param laboratoryId the laboratory of the Gateway
+     * @param environmentId the environment where the Gateway is located
+     * @param gatewayEquipmentId the equipment identifier of the Gateway
+     * @param deviceId the device (equipment) identifier
+     * @return true when the device is among the ones the Gateway serves
+     */
+    boolean isServedByEdgeGateway(Long laboratoryId, Long environmentId, Long gatewayEquipmentId, Long deviceId);
 
     /**
      * Finds an IoT device (environmental device or container monitor) located in an environment.
@@ -56,6 +102,25 @@ public interface EquipmentContextFacade {
     List<DeviceReference> findDevices(Long laboratoryId);
 
     /**
+     * Equipment of the laboratory, located or not, used by the operational counts of the indicators (US93).
+     *
+     * @param laboratoryId the laboratory that owns the equipment
+     * @return the equipment; empty when the laboratory has none
+     */
+    List<EquipmentReference> findLaboratoryEquipment(Long laboratoryId);
+
+    /**
+     * Finds an equipment located in an environment with its BPM parameter ranges and its maintenance history, used by
+     * the equipment log report.
+     *
+     * @param laboratoryId the laboratory that must own the equipment
+     * @param environmentId the environment where the equipment must be located
+     * @param equipmentId the equipment identifier
+     * @return the equipment, or empty when it is not located in the environment of the laboratory
+     */
+    Optional<EquipmentLogReference> findEquipmentLog(Long laboratoryId, Long environmentId, Long equipmentId);
+
+    /**
      * Equipment data shared with other bounded contexts.
      *
      * @param id the equipment identifier
@@ -76,6 +141,39 @@ public interface EquipmentContextFacade {
     }
 
     /**
+     * Edge Gateway information exposed to other bounded contexts.
+     *
+     * <p>This reference contains the information required
+     * to identify a Gateway and determine its current
+     * laboratory, environment and operational status.</p>
+     *
+     * <p>Authentication credentials are not included because
+     * they are managed exclusively by IAM.</p>
+     *
+     * @param equipmentId Gateway equipment identifier
+     * @param laboratoryId owning laboratory identifier
+     * @param environmentId assigned environment, or null if unassigned
+     * @param sensorExternalId unique external Gateway identifier
+     * @param status current operational status
+     */
+    record EdgeGatewayReference(Long equipmentId, Long laboratoryId, Long environmentId, String sensorExternalId, String status) {
+
+        /**
+         * Determines whether the Gateway is operational.
+         *
+         * @return true when the Gateway is operational
+         */
+        public boolean isOperational() {return "OPERATIONAL".equals(status);}
+
+        /**
+         * Determines whether the Gateway has an assigned environment.
+         *
+         * @return true when an environment is assigned
+         */
+        public boolean isAssigned() {return environmentId != null;}
+    }
+
+    /**
      * IoT device data shared with other bounded contexts.
      *
      * @param id the device (equipment) identifier
@@ -87,6 +185,36 @@ public interface EquipmentContextFacade {
      */
     record DeviceReference(Long id, Long laboratoryId, Long environmentId, String name, String deviceType,
                            String sensorExternalId) {
+    }
+
+    /**
+     * Equipment with its BPM parameter ranges and maintenance history, shared with other bounded contexts.
+     *
+     * @param type the equipment type name
+     * @param status the operational status name (OPERATIONAL, MAINTENANCE, OUT_OF_SERVICE or INACTIVE)
+     * @param sensorExternalId the identifier with which Edge recognises the device, or null
+     * @param parameters the configured BPM parameter ranges
+     * @param maintenance the maintenance records, in any order
+     */
+    record EquipmentLogReference(Long id, Long laboratoryId, Long environmentId, String name, String type, String model,
+                                 String serialNumber, String status, String sensorExternalId,
+                                 List<ParameterRange> parameters, List<MaintenanceEntry> maintenance) {
+        public EquipmentLogReference {
+            parameters = List.copyOf(parameters);
+            maintenance = List.copyOf(maintenance);
+        }
+    }
+
+    /** BPM range configured for a parameter of an equipment. */
+    record ParameterRange(String parameterName, Double minValue, Double maxValue, String unit) {
+    }
+
+    /**
+     * Maintenance record of an equipment.
+     *
+     * @param type the maintenance type name
+     */
+    record MaintenanceEntry(Long id, LocalDate performedOn, String type, String technicianName, String description) {
     }
 
     /**

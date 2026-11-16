@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Instant;
 
 /**
@@ -21,14 +22,16 @@ import java.time.Instant;
 public class CalibrationExpiredEventHandler {
 
     private final ComplianceEventRepository complianceEventRepository;
+    private final Clock complianceClock;
 
     /**
      * Creates a new CalibrationExpiredEventHandler.
      *
      * @param complianceEventRepository compliance event repository
      */
-    public CalibrationExpiredEventHandler(ComplianceEventRepository complianceEventRepository) {
+    public CalibrationExpiredEventHandler(ComplianceEventRepository complianceEventRepository, Clock complianceClock) {
         this.complianceEventRepository = complianceEventRepository;
+        this.complianceClock = complianceClock;
     }
 
     /**
@@ -47,7 +50,7 @@ public class CalibrationExpiredEventHandler {
                 event.equipmentId(),
                 ComplianceEventType.EQUIPMENT_CALIBRATION_EXPIRED,
                 "Calibration of equipment '%s' (%s) expired.".formatted(event.equipmentName(), event.serialNumber()),
-                Instant.now().toString(),
+                Instant.now(complianceClock).toString(),
                 null
         ));
     }

@@ -5,6 +5,9 @@ import java.util.List;
 
 /**
  * Anti-corruption facade that exposes Tracking &amp; Telemetry records to other bounded contexts.
+ *
+ * <p>It only shares primitive values and its own reference records, never the Tracking domain model. Missing
+ * arguments or a period that ends before it starts return an empty list instead of an error.</p>
  */
 public interface TrackingContextFacade {
 

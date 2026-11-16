@@ -15,6 +15,13 @@ public class CurrentUserImpl implements CurrentUser {
     }
 
     @Override
+    public Long laboratoryId() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getPrincipal() instanceof UserDetailsImpl user
+                ? user.getLaboratoryId() : null;
+    }
+
+    @Override
     public boolean hasAnyAuthority(String... authorities) {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) return false;

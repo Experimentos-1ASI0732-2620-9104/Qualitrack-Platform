@@ -1,20 +1,22 @@
 package com.iotech.qualitrack.platform.batch.application.acl;
 
 import com.iotech.qualitrack.platform.batch.domain.repositories.BatchRepository;
-import com.iotech.qualitrack.platform.shared.application.result.ApplicationException;
-import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.annotation.Propagation;
 
 import com.iotech.qualitrack.platform.batch.application.queryservices.BatchQueryService;
 import com.iotech.qualitrack.platform.batch.application.queryservices.BatchTraceabilityQueryService;
+import com.iotech.qualitrack.platform.batch.application.queryservices.RawMaterialUsageQueryService;
+import com.iotech.qualitrack.platform.batch.domain.model.aggregates.Batch;
+import com.iotech.qualitrack.platform.batch.domain.model.entities.RawMaterialUsage;
 import com.iotech.qualitrack.platform.batch.domain.model.queries.GetBatchTraceabilityQuery;
 import com.iotech.qualitrack.platform.batch.domain.model.queries.GetBatchByIdQuery;
+import com.iotech.qualitrack.platform.batch.domain.model.queries.GetBatchesByLabIdQuery;
+import com.iotech.qualitrack.platform.batch.domain.model.queries.GetRawMaterialUsageByBatchIdQuery;
 import com.iotech.qualitrack.platform.batch.domain.model.valueobjects.BatchStatus;
 import com.iotech.qualitrack.platform.batch.interfaces.acl.BatchContextFacade;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -26,26 +28,15 @@ public class BatchContextFacadeImpl implements BatchContextFacade {
     private final BatchQueryService batchQueryService;
     private final BatchRepository repository;
     private final BatchTraceabilityQueryService traceabilityQueryService;
+    private final RawMaterialUsageQueryService usageQueryService;
 
-    /**
-     * @param traceabilityQueryService lazy: the traceability reads Inventory, whose consumption validates batches here
-     */
     public BatchContextFacadeImpl(BatchQueryService batchQueryService,
-            BatchRepository repository, @Lazy BatchTraceabilityQueryService traceabilityQueryService) {
+            BatchRepository repository, BatchTraceabilityQueryService traceabilityQueryService,
+            RawMaterialUsageQueryService usageQueryService) {
         this.batchQueryService = batchQueryService;
         this.repository = repository;
         this.traceabilityQueryService = traceabilityQueryService;
-    }
-
-    @Override
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void requireConsumable(Long batchId, Long laboratoryId) {
-        var batch = repository.findByIdForUpdate(batchId).filter(value -> laboratoryId.equals(value.getLabId()))
-            .orElseThrow(() -> new ApplicationException(
-                ApplicationError.notFound("Batch", batchId)));
-        if (batch.getStatus() == BatchStatus.RELEASED || batch.getStatus() == BatchStatus.REJECTED)
-            throw new ApplicationException(
-                ApplicationError.conflict("Batch", "Closed product batches cannot consume materials"));
+        this.usageQueryService = usageQueryService;
     }
 
     @Override
@@ -91,6 +82,38 @@ public class BatchContextFacadeImpl implements BatchContextFacade {
     }
 
     @Override
+    public Optional<BatchReference> findBatch(Long batchId) {
+        if (batchId == null || batchId <= 0) return Optional.empty();
+        return batchQueryService.handle(new GetBatchByIdQuery(batchId)).map(BatchContextFacadeImpl::toReference);
+    }
+
+    @Override
+    public List<BatchReference> findBatches(Long laboratoryId) {
+        if (laboratoryId == null || laboratoryId <= 0) return List.of();
+        return batchQueryService.handle(new GetBatchesByLabIdQuery(laboratoryId)).stream()
+                .map(BatchContextFacadeImpl::toReference).toList();
+    }
+
+    @Override
+    public List<MaterialUse> findMaterialUses(Long batchId) {
+        if (batchId == null || batchId <= 0) return List.of();
+        return usageQueryService.handle(new GetRawMaterialUsageByBatchIdQuery(batchId)).stream()
+                .map(BatchContextFacadeImpl::toMaterialUse).toList();
+    }
+
+    private static BatchReference toReference(Batch batch) {
+        return new BatchReference(batch.getId(), batch.getLabId(), batch.getBatchNumber(), batch.getProductName(),
+                batch.getQuantity(), batch.getUnit(), batch.getStatus() == null ? null : batch.getStatus().name(),
+                batch.getStartDate(), batch.getEndDate(), batch.getNotes());
+    }
+
+    private static MaterialUse toMaterialUse(RawMaterialUsage usage) {
+        return new MaterialUse(usage.getId(), usage.getRawMaterialId(), usage.getRawMaterialName(),
+                usage.getInventoryReceiptId(), usage.getQuantityUsed(), usage.getUnit(), usage.getUsageDate(),
+                usage.getStockBefore(), usage.getStockAfter());
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<TraceabilityReference> findTraceability(Long batchId) {
         if (batchId == null) return Optional.empty();
@@ -99,11 +122,7 @@ public class BatchContextFacadeImpl implements BatchContextFacade {
                 .flatMap(batch -> traceabilityQueryService.handle(new GetBatchTraceabilityQuery(batch.getLabId(),
                         batch.getEnvironmentId(), batch.getProductId(), batch.getId())))
                 .map(trace -> new TraceabilityReference(trace.batch().getId(), trace.product().getCode(),
-                        trace.rawMaterials().stream().map(traced -> new MaterialUse(traced.usage().getId(),
-                                traced.usage().getRawMaterialId(), traced.usage().getRawMaterialName(),
-                                traced.usage().getInventoryReceiptId(), traced.usage().getQuantityUsed(),
-                                traced.usage().getUnit(), traced.usage().getUsageDate(), traced.usage().getStockBefore(),
-                                traced.usage().getStockAfter())).toList(),
+                        trace.rawMaterials().stream().map(traced -> toMaterialUse(traced.usage())).toList(),
                         trace.equipment().stream().map(usage -> new EquipmentUse(usage.getEquipmentId(),
                                 usage.getEquipmentName(), usage.getRegisteredAt())).toList(),
                         trace.staff().stream().map(member -> new StaffUse(member.getStaffId(), member.getStaffName(),

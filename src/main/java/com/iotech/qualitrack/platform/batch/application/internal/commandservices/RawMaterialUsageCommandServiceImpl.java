@@ -14,9 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Registers raw material usages of product batches.
  *
- * <p>Product Batch Management does not manage stock: it asks Inventory Management to consume the lot.
- * Inventory publishes the confirmed consumption and {@code ReceiptConsumedEventHandler} records the usage
- * in the same transaction, so stock and traceability never diverge.</p>
+ * <p>Product Batch Management does not manage stock: it locks the batch, checks that it can still consume raw
+ * materials and then asks Inventory Management to consume the lot. Inventory publishes the confirmed consumption and
+ * {@code ReceiptConsumedEventHandler} records the usage in the same transaction, so stock and traceability never
+ * diverge.</p>
  */
 @Service
 public class RawMaterialUsageCommandServiceImpl implements RawMaterialUsageCommandService {
@@ -35,7 +36,8 @@ public class RawMaterialUsageCommandServiceImpl implements RawMaterialUsageComma
     @Override
     @Transactional
     public Result<RawMaterialUsage, ApplicationError> handle(RegisterRawMaterialUsageCommand command) {
-        var batch = batches.findById(command.batchId())
+        // Locked so that the batch is not released or rejected while its lot is consumed.
+        var batch = batches.findByIdForUpdate(command.batchId())
                 .filter(value -> value.belongsTo(command.laboratoryId(), command.environmentId(), command.productId()));
         if (batch.isEmpty()) return Result.failure(ApplicationError.notFound("Batch", command.batchId()));
         var previous = usages.findByBatchIdAndOperationId(command.batchId(), command.operationId());

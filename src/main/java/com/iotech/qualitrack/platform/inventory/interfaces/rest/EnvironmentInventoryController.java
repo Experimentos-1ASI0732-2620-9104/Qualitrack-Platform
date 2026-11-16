@@ -15,6 +15,7 @@ import com.iotech.qualitrack.platform.inventory.interfaces.rest.resources.*;
 import com.iotech.qualitrack.platform.inventory.interfaces.rest.transform.*;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationException;
+import com.iotech.qualitrack.platform.shared.application.result.Result;
 import com.iotech.qualitrack.platform.shared.interfaces.rest.resources.ErrorResource;
 import com.iotech.qualitrack.platform.shared.interfaces.rest.transform.ErrorResponseAssembler;
 import com.iotech.qualitrack.platform.shared.interfaces.rest.transform.ResponseEntityAssembler;
@@ -284,7 +285,10 @@ public class EnvironmentInventoryController {
     })
     public ResponseEntity<?> importRawMaterial(@PathVariable Long laboratoryId, @PathVariable Long environmentId,
                                                @Valid @RequestBody ImportRawMaterialResource resource) {
-        var materialId = imports.handle(new ImportLegacyRawMaterialCommand(laboratoryId, environmentId, resource.legacyId()));
+        var materialId = switch (imports.handle(new ImportLegacyRawMaterialCommand(laboratoryId, environmentId, resource.legacyId()))) {
+            case Result.Success<Long, ApplicationError> success -> success.value();
+            case Result.Failure<Long, ApplicationError> failure -> throw new ApplicationException(failure.error());
+        };
         var material = queries.handle(new GetEnvironmentRawMaterialByIdQuery(laboratoryId, environmentId, materialId))
                 .orElseThrow(() -> new ApplicationException(ApplicationError.notFound("Material", materialId)));
         var location = ServletUriComponentsBuilder.fromCurrentContextPath()

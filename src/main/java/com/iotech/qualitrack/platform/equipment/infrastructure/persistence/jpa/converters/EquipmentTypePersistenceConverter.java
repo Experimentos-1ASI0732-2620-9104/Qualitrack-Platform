@@ -4,6 +4,9 @@ import com.iotech.qualitrack.platform.equipment.domain.model.valueobjects.Equipm
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
+/**
+ * Stores the {@link EquipmentType} value object as its plain text value in the database.
+ */
 @Converter(autoApply = true)
 public class EquipmentTypePersistenceConverter implements AttributeConverter<EquipmentType, String> {
 

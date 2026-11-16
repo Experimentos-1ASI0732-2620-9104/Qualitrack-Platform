@@ -12,6 +12,10 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * JPA adapter of the domain {@link ActuationEventRepository}: it delegates to Spring Data and translates the rows
+ * with the persistence assembler.
+ */
 @Repository
 public class ActuationEventRepositoryImpl implements ActuationEventRepository {
     private final ActuationEventPersistenceRepository persistenceRepository;
@@ -39,6 +43,9 @@ public class ActuationEventRepositoryImpl implements ActuationEventRepository {
                 .stream().map(ActuationEventPersistenceAssembler::toDomainFromPersistence).toList();
     }
 
+    /**
+     * An unknown action name cannot match a stored action, so it returns empty without querying.
+     */
     @Override
     public Optional<ActuationEvent> findByDeviceAndActionAndOccurredAt(Long deviceId, String action, Instant occurredAt) {
         return ActuationAction.parse(action)

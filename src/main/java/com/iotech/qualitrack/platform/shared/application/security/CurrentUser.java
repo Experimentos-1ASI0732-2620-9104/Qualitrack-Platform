@@ -5,6 +5,11 @@ public interface CurrentUser {
     Long userId();
 
     /**
+     * Laboratory associated with the account of the authenticated actor, or null before its laboratory is created.
+     */
+    Long laboratoryId();
+
+    /**
      * Whether the authenticated actor holds any of the authorities, for example ROLE_QA_MANAGER.
      */
     boolean hasAnyAuthority(String... authorities);

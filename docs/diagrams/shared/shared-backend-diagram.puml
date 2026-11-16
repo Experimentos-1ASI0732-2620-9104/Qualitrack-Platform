@@ -43,6 +43,15 @@ package "shared" {
     }
   }
 
+  package "application.security" {
+    interface CurrentUser {
+      +userId(): Long
+      +laboratoryId(): Long
+      +hasAnyAuthority(authorities: String...): boolean
+      +managesQuality(): boolean
+    }
+  }
+
   package "application.notifications" {
     interface EmailSender {
       +send(message: EmailMessage): boolean
@@ -164,6 +173,16 @@ package "shared" {
 
 Result <|.. Success
 Result <|.. Failure
+
+note bottom of CurrentUser
+  Implemented by IAM from the signed-in account; the controllers of the
+  contexts read the user and its laboratory here, never from IAM internals.
+end note
+note bottom of ErrorResponseAssembler
+  messages.properties and messages_en.properties keep the English message of
+  each ApplicationError; messages_es.properties translates the general message
+  for Accept-Language: es and keeps the details.
+end note
 
 EmailSender ..> EmailMessage
 ResendEmailSender ..|> EmailSender

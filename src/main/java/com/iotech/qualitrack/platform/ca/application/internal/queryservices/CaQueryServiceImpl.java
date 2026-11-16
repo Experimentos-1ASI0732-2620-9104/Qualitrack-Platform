@@ -11,6 +11,7 @@ import com.iotech.qualitrack.platform.ca.domain.model.queries.GetAlertsQuery;
 import com.iotech.qualitrack.platform.ca.domain.model.queries.GetComplianceEventsByRelatedEntityIdQuery;
 import com.iotech.qualitrack.platform.ca.domain.model.queries.GetNotificationPreferenceByUserIdQuery;
 import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertOrigin;
+import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.ComplianceEventSubject;
 import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.DeviationAlertDetail;
 import com.iotech.qualitrack.platform.ca.domain.repositories.ComplianceEventRepository;
 import com.iotech.qualitrack.platform.ca.domain.repositories.DeviationAlertRepository;
@@ -19,8 +20,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * Application service implementation that executes CA read queries.
@@ -92,10 +95,9 @@ public class CaQueryServiceImpl implements CaQueryService {
             default -> List.<DeviationAlert>of();
         };
         var related = alerts.stream().flatMap(alert -> complianceEventRepository.findAllByRelatedEntityId(alert.getId()).stream())
-                .filter(event -> event.getEventType().subject()
-                        == com.iotech.qualitrack.platform.ca.domain.model.valueobjects.ComplianceEventSubject.ALERT);
-        return java.util.stream.Stream.concat(direct, related)
-                .sorted(java.util.Comparator.comparing(ComplianceEvent::getTimestamp)).toList();
+                .filter(event -> event.getEventType().subject() == ComplianceEventSubject.ALERT);
+        return Stream.concat(direct, related)
+                .sorted(Comparator.comparing(ComplianceEvent::getTimestamp)).toList();
     }
 
     @Override

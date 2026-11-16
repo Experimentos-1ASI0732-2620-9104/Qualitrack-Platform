@@ -11,12 +11,18 @@ import java.util.ArrayList;
 
 /**
  * Static assembler between environmental profile domain and persistence representations.
+ *
+ * <p>The {@code updatedBy}/{@code updatedAt} of the domain are stored as {@code configured_by}/{@code configured_at},
+ * so they are not confused with the audit columns of the row.</p>
  */
 public final class EnvironmentalProfilePersistenceAssembler {
 
     private EnvironmentalProfilePersistenceAssembler() {
     }
 
+    /**
+     * @return the domain profile with its thresholds and rules in the stored order; null for a null entity
+     */
     public static EnvironmentalProfile toDomainFromPersistence(EnvironmentalProfilePersistenceEntity entity) {
         if (entity == null) return null;
         var thresholds = entity.getThresholds().stream()
@@ -31,6 +37,12 @@ public final class EnvironmentalProfilePersistenceAssembler {
                 entity.getConfiguredBy(), entity.getConfiguredAt());
     }
 
+    /**
+     * Copies a profile into an entity, replacing its thresholds and rules.
+     *
+     * @param entity stored entity to update, or null to create a new one
+     * @return the updated or new entity; null for a null profile
+     */
     public static EnvironmentalProfilePersistenceEntity toPersistenceFromDomain(EnvironmentalProfile profile,
                                                                                  EnvironmentalProfilePersistenceEntity entity) {
         if (profile == null) return null;

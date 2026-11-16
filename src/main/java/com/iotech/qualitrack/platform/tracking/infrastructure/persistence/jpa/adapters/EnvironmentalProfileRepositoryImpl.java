@@ -9,6 +9,13 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
+/**
+ * JPA adapter of the domain {@link EnvironmentalProfileRepository}: it delegates to Spring Data and translates the
+ * rows with the persistence assembler.
+ *
+ * <p>Saving loads the stored entity first, so its audit columns are kept and the thresholds and rules of the same
+ * profile are replaced.</p>
+ */
 @Repository
 public class EnvironmentalProfileRepositoryImpl implements EnvironmentalProfileRepository {
     private final EnvironmentalProfilePersistenceRepository repository;

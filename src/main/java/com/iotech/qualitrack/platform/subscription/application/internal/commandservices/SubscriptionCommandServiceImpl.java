@@ -186,15 +186,17 @@ public class SubscriptionCommandServiceImpl implements SubscriptionCommandServic
             ));
         }
 
-        if (command.stripePaymentIntentId() != null
-                && subscriptionPaymentRepository.findByProviderPaymentId(command.stripePaymentIntentId()).isPresent()) {
+        if (command.providerPaymentId() != null
+                && subscriptionPaymentRepository.findByProviderPaymentId(command.providerPaymentId()).isPresent()) {
             return Result.failure(ApplicationError.conflict(
                     "SubscriptionPayment",
-                    "Payment with provider ID '%s' already exists".formatted(command.stripePaymentIntentId())
+                    "Payment with provider ID '%s' already exists".formatted(command.providerPaymentId())
             ));
         }
 
-        if (subscriptionPaymentRepository.findByStripeCheckoutSessionId(command.stripeCheckoutSessionId()).isPresent()) {
+        // A renewal has no checkout session: looking one up by null would match the other renewals.
+        if (command.stripeCheckoutSessionId() != null
+                && subscriptionPaymentRepository.findByStripeCheckoutSessionId(command.stripeCheckoutSessionId()).isPresent()) {
             return Result.failure(ApplicationError.conflict(
                     "SubscriptionPayment",
                     "Payment with checkout session ID '%s' already exists".formatted(command.stripeCheckoutSessionId())
@@ -204,7 +206,7 @@ public class SubscriptionCommandServiceImpl implements SubscriptionCommandServic
         try {
             var payment = SubscriptionPayment.stripePayment(
                     command.subscriptionId(),
-                    command.stripePaymentIntentId(),
+                    command.providerPaymentId(),
                     command.stripeCheckoutSessionId(),
                     new Money(command.amount(), command.currency()),
                     command.status(),

@@ -8,7 +8,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 /**
- * Publishes recorded readings to the other bounded contexts.
+ * Publishes recorded readings to the other bounded contexts as {@link MeasurementRecordedIntegrationEvent}.
  */
 @Service
 @Slf4j
@@ -19,6 +19,9 @@ public class MeasurementRecordedEventHandler {
         this.eventPublisher = eventPublisher;
     }
 
+    /**
+     * Translates the domain event into {@link MeasurementRecordedIntegrationEvent} and publishes it.
+     */
     @EventListener(MeasurementRecordedEvent.class)
     public void on(MeasurementRecordedEvent event) {
         log.debug("Measurement recorded: id={}, device={}, metric={}, state={}", event.measurementId(),

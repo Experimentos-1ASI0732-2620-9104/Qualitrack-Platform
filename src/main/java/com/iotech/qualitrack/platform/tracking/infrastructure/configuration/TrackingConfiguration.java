@@ -9,8 +9,15 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.ZoneId;
 
+/**
+ * Spring configuration of Tracking &amp; Telemetry.
+ */
 @Configuration
 public class TrackingConfiguration {
+    /**
+     * Clock used to reject future readings and to evaluate the connection of the devices, in the time zone of the
+     * laboratories (America/Lima).
+     */
     @Bean
     public Clock trackingClock() { return Clock.system(ZoneId.of("America/Lima")); }
 

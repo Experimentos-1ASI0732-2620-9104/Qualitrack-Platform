@@ -9,8 +9,10 @@ import com.iotech.qualitrack.platform.laboratory.domain.model.queries.GetLaborat
 import com.iotech.qualitrack.platform.laboratory.domain.model.aggregates.StaffMember;
 import com.iotech.qualitrack.platform.laboratory.domain.model.queries.GetStaffMemberByIdQuery;
 import com.iotech.qualitrack.platform.laboratory.domain.model.queries.GetStaffMemberByUserIdQuery;
+import com.iotech.qualitrack.platform.laboratory.domain.repositories.StaffRepository;
 import com.iotech.qualitrack.platform.laboratory.interfaces.acl.LaboratoryContextFacade;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,13 +26,15 @@ public class LaboratoryContextFacadeImpl implements LaboratoryContextFacade {
     private final LaboratoryQueryService laboratoryQueryService;
     private final EnvironmentQueryService environmentQueryService;
     private final StaffQueryService staffQueryService;
+    private final StaffRepository staffRepository;
 
     public LaboratoryContextFacadeImpl(LaboratoryQueryService laboratoryQueryService,
                                        EnvironmentQueryService environmentQueryService,
-                                       StaffQueryService staffQueryService) {
+                                       StaffQueryService staffQueryService, StaffRepository staffRepository) {
         this.laboratoryQueryService = laboratoryQueryService;
         this.environmentQueryService = environmentQueryService;
         this.staffQueryService = staffQueryService;
+        this.staffRepository = staffRepository;
     }
 
     @Override
@@ -40,6 +44,13 @@ public class LaboratoryContextFacadeImpl implements LaboratoryContextFacade {
         var result = laboratoryQueryService.handle(query);
 
         return result.isPresent();
+    }
+
+    @Override
+    public Optional<String> findLaboratoryName(Long laboratoryId) {
+        if (laboratoryId == null || laboratoryId <= 0) return Optional.empty();
+        return laboratoryQueryService.handle(new GetLaboratoryByIdQuery(laboratoryId))
+                .map(laboratory -> laboratory.getName().name());
     }
 
     @Override
@@ -77,6 +88,15 @@ public class LaboratoryContextFacadeImpl implements LaboratoryContextFacade {
     public Optional<StaffReference> findStaffMemberByAccount(Long userId) {
         if (userId == null || userId <= 0) return Optional.empty();
         return staffQueryService.handle(new GetStaffMemberByUserIdQuery(userId)).map(LaboratoryContextFacadeImpl::toReference);
+    }
+
+    @Override
+    @Transactional
+    public void renameStaffMemberByAccount(Long userId, String fullName) {
+        if (userId == null || userId <= 0) return;
+        staffRepository.findByUserId(userId)
+                .filter(member -> member.rename(fullName))
+                .ifPresent(staffRepository::save);
     }
 
     private static StaffReference toReference(StaffMember member) {

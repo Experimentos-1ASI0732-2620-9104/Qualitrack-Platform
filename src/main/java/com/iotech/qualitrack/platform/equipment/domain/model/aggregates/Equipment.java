@@ -8,6 +8,7 @@ import com.iotech.qualitrack.platform.equipment.domain.model.valueobjects.Equipm
 import com.iotech.qualitrack.platform.equipment.domain.model.valueobjects.EquipmentType;
 import com.iotech.qualitrack.platform.equipment.domain.model.valueobjects.IotDeviceType;
 import com.iotech.qualitrack.platform.shared.domain.model.aggregates.AbstractDomainAggregateRoot;
+import com.iotech.qualitrack.platform.equipment.domain.model.commands.RegisterEdgeGatewayCommand;
 import lombok.Getter;
 
 import java.time.Instant;
@@ -22,6 +23,9 @@ import java.util.Objects;
  */
 @Getter
 public class Equipment extends AbstractDomainAggregateRoot<Equipment> {
+
+    /** Category that identifies an Edge Gateway among the equipment of a laboratory. */
+    public static final String EDGE_GATEWAY_TYPE = "EDGE_GATEWAY";
 
     /**
      * The unique numeric identifier for the equipment.
@@ -142,10 +146,42 @@ public class Equipment extends AbstractDomainAggregateRoot<Equipment> {
     }
 
     /**
+     * Registers an Edge Gateway within a laboratory.
+     *
+     * <p>An Edge Gateway is represented as equipment with
+     * a unique external identifier, but it is not classified
+     * as an ESP32 IoT device.</p>
+     *
+     * <p>The Gateway starts in OPERATIONAL status and remains
+     * without an assigned environment until it is explicitly
+     * associated with one.</p>
+     *
+     * @param command validated Edge Gateway registration command
+     */
+    public Equipment(RegisterEdgeGatewayCommand command) {
+        this.labId = command.laboratoryId();
+        this.name = command.name();
+        this.type = new EquipmentType(EDGE_GATEWAY_TYPE);
+        this.model = command.model();
+        this.serialNumber = command.serialNumber();
+        this.sensorExternalId = new DeviceId(command.sensorExternalId());
+        this.deviceType = null;
+        this.firmwareVersion = null;
+        this.status = EquipmentStatus.OPERATIONAL;
+    }
+
+    /**
      * Whether this equipment is an IoT device that communicates with Edge.
      */
     public boolean isIotDevice() {
         return deviceType != null;
+    }
+
+    /**
+     * Whether this equipment is an Edge Gateway, which serves the IoT devices of its environment.
+     */
+    public boolean isEdgeGateway() {
+        return type != null && EDGE_GATEWAY_TYPE.equals(type.name());
     }
 
     public boolean isDeviceOfType(IotDeviceType expected) {

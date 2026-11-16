@@ -34,4 +34,10 @@ public class PasswordRecoveryRepositoryImpl implements PasswordRecoveryRepositor
         return recoveries.findFirstByUserIdOrderByRequestedAtDescIdDesc(userId)
                 .map(PasswordRecoveryPersistenceAssembler::toDomainFromPersistence);
     }
+
+    @Override
+    public Optional<PasswordRecovery> findLatestByUserIdForUpdate(Long userId) {
+        return recoveries.findFirstWithLockByUserIdOrderByRequestedAtDescIdDesc(userId)
+                .map(PasswordRecoveryPersistenceAssembler::toDomainFromPersistence);
+    }
 }

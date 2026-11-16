@@ -18,7 +18,10 @@ import java.time.Instant;
  * exceeds its allowed threshold, with the environment, origin and incident data of the alert.</p>
  */
 @Entity
-@Table(name = "deviation_alerts")
+@Table(name = "deviation_alerts", indexes = {
+        @Index(name = "idx_deviation_alerts_open_incident", columnList = "equipment_id, parameter_name, status"),
+        @Index(name = "idx_deviation_alerts_environment", columnList = "laboratory_id, environment_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor

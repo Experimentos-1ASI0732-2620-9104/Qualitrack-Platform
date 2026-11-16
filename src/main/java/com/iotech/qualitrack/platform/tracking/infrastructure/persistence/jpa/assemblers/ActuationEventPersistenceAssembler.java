@@ -11,6 +11,9 @@ public final class ActuationEventPersistenceAssembler {
     private ActuationEventPersistenceAssembler() {
     }
 
+    /**
+     * @return the domain action, with the creation time of the row as reception time; null for a null entity
+     */
     public static ActuationEvent toDomainFromPersistence(ActuationEventPersistenceEntity entity) {
         if (entity == null) return null;
         return new ActuationEvent(entity.getId(), entity.getLaboratoryId(), entity.getEnvironmentId(),
@@ -19,6 +22,9 @@ public final class ActuationEventPersistenceAssembler {
                 entity.getCreatedAt() == null ? null : entity.getCreatedAt().toInstant());
     }
 
+    /**
+     * @return a new entity; the audit columns are filled by JPA when it is saved; null for a null event
+     */
     public static ActuationEventPersistenceEntity toPersistenceFromDomain(ActuationEvent event) {
         if (event == null) return null;
         var entity = new ActuationEventPersistenceEntity();

@@ -19,6 +19,15 @@ public interface EquipmentRepository {
 
     List<Equipment> findAllByLabId(Long labId);
 
+    /**
+     * Finds the equipment of a laboratory located in one of its environments.
+     *
+     * @param labId laboratory that owns the equipment
+     * @param environmentId environment where the equipment is located
+     * @return equipment located in the environment
+     */
+    List<Equipment> findAllByLabIdAndEnvironmentId(Long labId, Long environmentId);
+
     Optional<Equipment> findBySensorExternalId(DeviceId sensorExternalId);
 
     Equipment save(Equipment equipment);

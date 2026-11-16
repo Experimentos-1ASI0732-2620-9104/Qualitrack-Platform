@@ -26,10 +26,16 @@ package "equipment.interfaces.acl" <<External>> {
   interface EquipmentContextFacade {
     + findDevice(laboratoryId, environmentId, deviceId): Optional<DeviceReference>
     + findEnvironmentalDevice(laboratoryId, environmentId): Optional<DeviceReference>
+    + isServedByEdgeGateway(laboratoryId, environmentId, gatewayEquipmentId, deviceId): boolean
   }
 }
 
 package "tracking.domain.model.valueobjects" {
+  class MonitoredDevice <<record>> {
+    + id: Long
+    + deviceType: String
+    + isContainerMonitor(): boolean
+  }
   enum MonitoredMetric {
     AIR_QUALITY (ppm, ENVIRONMENTAL_DEVICE)
     MOTION (event, ENVIRONMENTAL_DEVICE)
@@ -412,6 +418,7 @@ TrackingCommandServiceImpl --> MeasurementRepository
 TrackingCommandServiceImpl --> ActuationEventRepository
 TrackingCommandServiceImpl --> ApplicationEventPublisher
 TrackingCommandServiceImpl --> Clock
+TrackingCommandServiceImpl --> CurrentUser : user that changes a profile
 TrackingCommandServiceImpl ..> MeasurementRecordedEvent
 TrackingCommandServiceImpl ..> EnvironmentalDeviationDetectedEvent
 TrackingCommandServiceImpl ..> EnvironmentalConditionNormalizedEvent : WARNING/CRITICAL -> NORMAL
@@ -442,9 +449,10 @@ end note
 
 package "tracking.application.internal.outboundservices.acl" {
   class TrackingExternalEquipmentService {
-    + findDevice(laboratoryId, environmentId, deviceId): Optional<DeviceReference>
-    + findEnvironmentalDevice(laboratoryId, environmentId): Optional<DeviceReference>
-    + findContainerMonitor(laboratoryId, environmentId, deviceId): Optional<DeviceReference>
+    + findDevice(laboratoryId, environmentId, deviceId): Optional<MonitoredDevice>
+    + findEnvironmentalDevice(laboratoryId, environmentId): Optional<MonitoredDevice>
+    + findContainerMonitor(laboratoryId, environmentId, deviceId): Optional<MonitoredDevice>
+    + isServedByEdgeGateway(laboratoryId, environmentId, gatewayEquipmentId, deviceId): boolean
   }
 }
 
@@ -452,6 +460,7 @@ TrackingCommandServiceImpl --> TrackingExternalEquipmentService
 TrackingQueryServiceImpl --> TrackingExternalEquipmentService
 
 TrackingExternalEquipmentService --> EquipmentContextFacade
+TrackingExternalEquipmentService ..> MonitoredDevice : translates DeviceReference
 
 package "tracking.application.internal.eventhandlers" {
   class MeasurementRecordedEventHandler
@@ -659,11 +668,23 @@ package "tracking.interfaces.rest" {
   class EnvironmentTelemetryController
   class ContainerMonitorTelemetryController
   class DeviceTrackingController
+  class EdgeGatewayTelemetryController
+  class EdgeGatewayProfilesController
 }
+
+EdgeGatewayTelemetryController --> TrackingCommandService
+EdgeGatewayTelemetryController --> TrackingExternalEquipmentService
+EdgeGatewayProfilesController --> TrackingQueryService
+EdgeGatewayProfilesController --> TrackingExternalEquipmentService
+note bottom of EdgeGatewayTelemetryController
+  POST /edge-gateways/{gatewayId}/iot-devices/{iotDeviceId}/telemetry-measurements
+  and .../actuation-events, GET .../environmental-profile: an Edge Gateway signed
+  with its API key (ROLE_EDGE_GATEWAY) synchronizes only the devices it serves in
+  its environment; any other device is refused with 403.
+end note
 
 EnvironmentTelemetryController --> TrackingCommandService
 EnvironmentTelemetryController --> TrackingQueryService
-EnvironmentTelemetryController ..> CurrentUser
 EnvironmentTelemetryController ..> EnvironmentalProfileCommandFromResourceAssembler
 EnvironmentTelemetryController ..> EnvironmentalProfileResourceFromEntityAssembler
 EnvironmentTelemetryController ..> RecordMeasurementCommandFromResourceAssembler
@@ -679,7 +700,6 @@ end note
 
 ContainerMonitorTelemetryController --> TrackingCommandService
 ContainerMonitorTelemetryController --> TrackingQueryService
-ContainerMonitorTelemetryController ..> CurrentUser
 ContainerMonitorTelemetryController ..> EnvironmentalProfileCommandFromResourceAssembler
 ContainerMonitorTelemetryController ..> EnvironmentalProfileResourceFromEntityAssembler
 ContainerMonitorTelemetryController ..> RecordMeasurementCommandFromResourceAssembler
@@ -708,5 +728,12 @@ note bottom of DeviceTrackingController
   GET /telemetry-status        (TS41)
   GET /environmental-profile   (TS57, profile synchronized by the Edge)
 end note
+
+EdgeGatewayTelemetryController ..> RecordMeasurementCommandFromResourceAssembler
+EdgeGatewayTelemetryController ..> MeasurementResourceFromEntityAssembler
+EdgeGatewayTelemetryController ..> RecordActuationEventCommandFromResourceAssembler
+EdgeGatewayTelemetryController ..> ActuationEventResourceFromEntityAssembler
+EdgeGatewayTelemetryController ..> TelemetryResponseAssembler
+EdgeGatewayProfilesController ..> EnvironmentalProfileResourceFromEntityAssembler
 
 @enduml

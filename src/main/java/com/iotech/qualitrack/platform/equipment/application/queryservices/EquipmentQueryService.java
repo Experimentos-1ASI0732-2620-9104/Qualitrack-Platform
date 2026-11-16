@@ -3,6 +3,7 @@ package com.iotech.qualitrack.platform.equipment.application.queryservices;
 import com.iotech.qualitrack.platform.equipment.domain.model.aggregates.Equipment;
 import com.iotech.qualitrack.platform.equipment.domain.model.queries.GetCalibrationAlertsByLabIdQuery;
 import com.iotech.qualitrack.platform.equipment.domain.model.queries.GetEquipmentByDeviceIdQuery;
+import com.iotech.qualitrack.platform.equipment.domain.model.queries.GetEquipmentByEnvironmentIdQuery;
 import com.iotech.qualitrack.platform.equipment.domain.model.queries.GetEquipmentByIdQuery;
 import com.iotech.qualitrack.platform.equipment.domain.model.queries.GetEquipmentByLabIdQuery;
 
@@ -31,6 +32,16 @@ public interface EquipmentQueryService {
      * @see GetEquipmentByLabIdQuery
      */
     List<Equipment> handle(GetEquipmentByLabIdQuery query);
+
+    /**
+     * Handles retrieval of the equipment located in one environment of a laboratory, optionally only its IoT
+     * devices, as the Edge of the environment needs.
+     *
+     * @param query laboratory, environment and IoT filter
+     * @return equipment of the environment, or empty when the environment does not belong to the laboratory
+     * @see GetEquipmentByEnvironmentIdQuery
+     */
+    Optional<List<Equipment>> handle(GetEquipmentByEnvironmentIdQuery query);
 
     /**
      * Handles retrieval of an equipment linked to a specific external IoT sensor.

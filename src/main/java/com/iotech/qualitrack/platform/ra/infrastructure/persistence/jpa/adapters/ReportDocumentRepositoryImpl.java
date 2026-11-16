@@ -7,6 +7,12 @@ import com.iotech.qualitrack.platform.ra.infrastructure.persistence.jpa.reposito
 import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
+/**
+ * JPA adapter for the {@link ReportDocumentRepository} port.
+ * Manages exclusively the report binary content (PDF/CSV) stored in
+ * {@code audit_report_documents}, separated from metadata in {@code audit_reports}.
+ * Content is immutable: {@link #save} rejects overwriting an existing reportId.
+ */
 @Repository
 public class ReportDocumentRepositoryImpl implements ReportDocumentRepository {
     private final ReportDocumentPersistenceRepository repository;
@@ -15,6 +21,12 @@ public class ReportDocumentRepositoryImpl implements ReportDocumentRepository {
         this.repository = repository;
     }
 
+    /**
+     * Persists the binary content of a report.
+     * If a document already exists for {@code reportId}, throws {@link IllegalStateException}:
+     * immutability guarantees downloads match the checksum recorded in
+     * {@link com.iotech.qualitrack.platform.ra.domain.model.aggregates.AuditReport}.
+     */
     @Override
     public void save(ReportDocument document) {
         if (repository.existsById(document.reportId())) throw new IllegalStateException("Report content is immutable");
@@ -25,6 +37,10 @@ public class ReportDocumentRepositoryImpl implements ReportDocumentRepository {
         repository.save(entity);
     }
 
+    /**
+     * Retrieves the binary content by report id. Used on download
+     * ({@code GET /api/v1/reports/{id}/content}) to serve the original PDF/CSV.
+     */
     @Override
     public Optional<ReportDocument> findByReportId(Long reportId) {
         return repository.findById(reportId)

@@ -6,7 +6,7 @@ import com.iotech.qualitrack.platform.iam.domain.model.aggregates.User;
 import com.iotech.qualitrack.platform.iam.domain.model.commands.AssignRoleCommand;
 import com.iotech.qualitrack.platform.iam.domain.model.queries.GetAllUsersQuery;
 import com.iotech.qualitrack.platform.iam.domain.model.queries.GetUserByIdQuery;
-import com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.model.UserDetailsImpl;
+import com.iotech.qualitrack.platform.shared.application.security.CurrentUser;
 import com.iotech.qualitrack.platform.iam.interfaces.rest.resources.UserResource;
 import com.iotech.qualitrack.platform.iam.interfaces.rest.transform.UserResourceFromEntityAssembler;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
@@ -22,7 +22,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -43,17 +42,21 @@ public class UsersController {
 
     private final UserQueryService userQueryService;
     private final UserCommandService userCommandService;
+    private final CurrentUser currentUser;
 
-    public UsersController(UserQueryService userQueryService, UserCommandService userCommandService) {
+    public UsersController(UserQueryService userQueryService, UserCommandService userCommandService,
+                           CurrentUser currentUser) {
         this.userQueryService = userQueryService;
         this.userCommandService = userCommandService;
+        this.currentUser = currentUser;
     }
 
     @GetMapping
     @Operation(summary = "Get users", description = "Users of the laboratory of the authenticated user.")
-    public ResponseEntity<List<UserResource>> getUsers(@AuthenticationPrincipal UserDetailsImpl principal) {
+    public ResponseEntity<List<UserResource>> getUsers() {
+        var laboratoryId = currentUser.laboratoryId();
         var resources = userQueryService.handle(new GetAllUsersQuery()).stream()
-                .filter(user -> principal.getLaboratoryId() != null && principal.getLaboratoryId().equals(user.getLaboratoryId()))
+                .filter(user -> laboratoryId != null && laboratoryId.equals(user.getLaboratoryId()))
                 .map(UserResourceFromEntityAssembler::toResourceFromEntity)
                 .toList();
         return ResponseEntity.ok(resources);

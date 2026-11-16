@@ -17,7 +17,10 @@ import java.util.List;
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
- * Audit log of an equipment of the laboratory. Entries are recorded by the platform when the equipment changes.
+ * REST endpoint for the audit log of an equipment (US92 / equipment traceability).
+ * Entries are written by the platform when the equipment state changes, so this endpoint
+ * only exposes them for reading. The period ({@code dateFrom}, {@code dateTo}) is optional;
+ * without it, all equipment entries are listed.
  */
 @RestController
 @RequestMapping(value = "/api/v1/laboratories/{laboratoryId}/equipments/{equipmentId}/audit-logs",
@@ -30,6 +33,10 @@ public class EquipmentAuditLogController {
         this.raQueryService = raQueryService;
     }
 
+    /**
+     * Lists the equipment's audit entries. The {@code laboratoryId} in the path
+     * participates in tenancy checks (delegated to the security framework).
+     */
     @GetMapping
     @Operation(summary = "Get the audit log of an equipment", description = "Optional period: dateFrom and dateTo.")
     public ResponseEntity<List<AuditLogEntryResource>> getEquipmentAuditLogs(@PathVariable Long laboratoryId,

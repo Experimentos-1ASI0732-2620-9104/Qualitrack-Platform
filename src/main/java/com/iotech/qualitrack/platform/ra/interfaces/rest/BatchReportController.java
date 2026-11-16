@@ -28,7 +28,13 @@ import java.util.List;
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
- * Traceability reports of a production batch (TS84).
+ * REST endpoints for batch traceability reports (TS84).
+ * <ul>
+ *   <li>{@code POST /api/v1/batches/{batchId}/reports}: requests generating and storing a batch
+ *       report (PDF/CSV) for the authenticated user.</li>
+ *   <li>{@code GET /api/v1/batches/{batchId}/reports}: lists already-generated batch reports.</li>
+ * </ul>
+ * The endpoint returns metadata + Location pointing to the persisted resource.
  */
 @RestController
 @RequestMapping(value = "/api/v1/batches/{batchId}/reports", produces = APPLICATION_JSON_VALUE)
@@ -44,6 +50,15 @@ public class BatchReportController {
         this.currentUser = currentUser;
     }
 
+    /**
+     * REST endpoints for batch traceability reports (TS84).
+     * <ul>
+     *   <li>{@code POST /api/v1/batches/{batchId}/reports}: requests generating and storing a batch
+     *       report (PDF/CSV) for the authenticated user.</li>
+     *   <li>{@code GET /api/v1/batches/{batchId}/reports}: lists already-generated batch reports.</li>
+     * </ul>
+     * The endpoint returns metadata + Location pointing to the persisted resource.
+     */
     @PostMapping(consumes = APPLICATION_JSON_VALUE)
     @Operation(summary = "Generate a batch traceability report",
             description = "Stores the PDF or CSV report requested by the authenticated user (TS84).")
@@ -59,6 +74,7 @@ public class BatchReportController {
         return ReportResponseAssembler.toCreatedResponse(raCommandService.handle(command));
     }
 
+    /** Lists reports attached to the batch, mapped to {@link AuditReportResource}. */
     @GetMapping
     @Operation(summary = "Get the reports of a batch")
     public ResponseEntity<List<AuditReportResource>> getAuditReportsByBatchId(@PathVariable Long batchId) {

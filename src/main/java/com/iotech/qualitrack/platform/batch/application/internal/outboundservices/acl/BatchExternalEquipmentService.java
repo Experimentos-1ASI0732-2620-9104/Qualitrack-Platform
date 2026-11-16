@@ -34,4 +34,13 @@ public class BatchExternalEquipmentService {
     public Optional<EquipmentContextFacade.ContainerReference> findContainerMonitor(Long laboratoryId, Long containerMonitorId) {
         return equipmentContextFacade.findContainerMonitor(laboratoryId, containerMonitorId);
     }
+
+    /**
+     * Name of a container monitor of the laboratory.
+     *
+     * @return the name, or empty when the device is not a container monitor of the laboratory
+     */
+    public Optional<String> findContainerName(Long laboratoryId, Long containerMonitorId) {
+        return findContainerMonitor(laboratoryId, containerMonitorId).map(EquipmentContextFacade.ContainerReference::name);
+    }
 }

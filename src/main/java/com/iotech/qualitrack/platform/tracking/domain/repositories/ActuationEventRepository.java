@@ -10,6 +10,12 @@ import java.util.Optional;
  * Repository of the actions executed by the container monitors.
  */
 public interface ActuationEventRepository {
+
+    /**
+     * Stores a new action.
+     *
+     * @return the stored action, with its identifier and reception time
+     */
     ActuationEvent save(ActuationEvent event);
 
     /**
@@ -27,5 +33,8 @@ public interface ActuationEventRepository {
      */
     Optional<ActuationEvent> findByDeviceAndActionAndOccurredAt(Long deviceId, String action, Instant occurredAt);
 
+    /**
+     * Moment the platform received the latest action of a device, used to know whether it is communicating.
+     */
     Optional<Instant> findLastReceivedAt(Long deviceId);
 }

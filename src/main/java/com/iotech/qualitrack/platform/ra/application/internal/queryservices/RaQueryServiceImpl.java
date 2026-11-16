@@ -112,6 +112,12 @@ public class RaQueryServiceImpl implements RaQueryService {
                         .toList());
     }
 
+    /**
+     * Handles retrieval of audit log entries using optional filters.
+     *
+     * @param query The query containing optional equipment, batch and date filters.
+     * @return List of audit log entries matching the provided filters.
+     */
     @Override
     public List<AuditLogEntry> handle(GetAuditLogQuery query) {
         var hasEquipmentFilter = query.equipmentId() != null;

@@ -286,6 +286,7 @@ package "batch.application.internal.outboundservices.acl" {
   class BatchExternalInventoryService
   class BatchExternalEquipmentService {
     + findContainerMonitor(laboratoryId, deviceId): Optional<ContainerReference>
+    + findContainerName(laboratoryId, deviceId): Optional<String>
   }
   class BatchExternalComplianceService
 }
@@ -294,6 +295,10 @@ ProductCommandServiceImpl --> ExternalLaboratoryService
 BatchCommandServiceImpl --> BatchExternalEquipmentService
 BatchCommandServiceImpl --> ExternalLaboratoryService
 RawMaterialUsageCommandServiceImpl --> BatchExternalInventoryService
+note bottom of RawMaterialUsageCommandServiceImpl
+  Locks the batch and rejects released or rejected batches before
+  asking Inventory to consume the lot; Inventory does not call Batch.
+end note
 BatchParticipationCommandServiceImpl --> BatchExternalEquipmentService
 BatchParticipationCommandServiceImpl --> ExternalLaboratoryService
 BatchTraceabilityQueryServiceImpl --> BatchExternalInventoryService
@@ -310,12 +315,27 @@ package "batch.application.acl" {
 
 package "batch.interfaces.acl" {
   interface BatchContextFacade {
-    + requireConsumable(batchId, laboratoryId): void
     + existsBatchById(batchId): boolean
     + belongsToLaboratory(batchId, laboratoryId): boolean
     + isBatchReleased(batchId): boolean
     + isBatchRejected(batchId): boolean
+    + findBatch(batchId): Optional<BatchReference>
+    + findBatches(laboratoryId): List<BatchReference>
+    + findMaterialUses(batchId): List<MaterialUse>
     + findTraceability(batchId): Optional<TraceabilityReference>
+  }
+  class BatchReference <<record>> {
+    + id: Long
+    + laboratoryId: Long
+    + batchNumber: String
+    + productName: String
+    + quantity: Double
+    + unit: String
+    + status: String
+    + startDate: String
+    + endDate: String
+    + notes: String
+    + isReleased(): boolean
   }
   class TraceabilityReference <<record>> {
     + batchId: Long
@@ -331,10 +351,15 @@ package "batch.interfaces.acl" {
 }
 
 BatchContextFacadeImpl ..|> BatchContextFacade
+BatchContextFacadeImpl --> BatchQueryService
+BatchContextFacadeImpl --> RawMaterialUsageQueryService
+BatchContextFacade ..> BatchReference
 BatchContextFacade ..> TraceabilityReference
 note bottom of BatchContextFacade
   findTraceability: materials with their lots and stock, equipment, staff,
   container and quality decision, read by the batch report of Reporting (US96).
+  findBatch, findMaterialUses and findBatches: batch data, materials of older
+  batches and the batch counts of the indicators (US93).
 end note
 BatchTenantResourceLookup ..|> TenantResourceLookup
 note bottom of BatchTenantResourceLookup

@@ -20,28 +20,59 @@ import java.util.Locale;
 
 /** Shared paginated PDF layout for operational reports; contains no business data queries. */
 abstract class AbstractReportPdfRenderer {
+    // Page margins and usable A4 area reused by every subclass.
     protected static final float MARGIN = 40;
     protected static final float WIDTH = PDRectangle.A4.getWidth() - 2 * MARGIN;
+
+    // BOTTOM represents the lower limit (in "top-based" coordinates) before forcing a page break.
     protected static final float BOTTOM = PDRectangle.A4.getHeight() - 62;
+
+    // Shared corporate palette: INK for primary text, TEAL for accents,
+    // MUTED for secondary text and LINE/LIGHT for separators and backgrounds.
     protected static final Color INK = new Color(30, 48, 59);
     protected static final Color TEAL = new Color(0, 112, 119);
     protected static final Color MUTED = new Color(92, 109, 119);
     protected static final Color LINE = new Color(217, 228, 231);
     protected static final Color LIGHT = new Color(243, 247, 248);
+
+    // Semantic status colors: red (critical/rejected), amber (warning/pending),
+    // green (resolved/released).
     protected static final Color RED = new Color(185, 49, 64);
     protected static final Color AMBER = new Color(178, 111, 15);
     protected static final Color GREEN = new Color(31, 126, 99);
+
+    // Standard PDF Box fonts (Helvetica regular and bold) used across the document.
     protected final PDType1Font regular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
     protected final PDType1Font bold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+
+    // Mutable state of the in-flight document: a single PDF and a single active content stream.
     private PDDocument document;
     private PDPageContentStream stream;
     private String reportTitle;
     private String reportReference;
+
+    // Vertical cursor (top-based coordinate) that subclasses advance while drawing.
     protected float y;
 
+    /**
+     * Functional contract implemented by subclasses to draw the report-specific content
+     * (summary, tables, sections, etc.). It runs inside {@link #renderDocument}.
+     */
     @FunctionalInterface
     protected interface Contents { void draw() throws IOException; }
 
+    /**
+     * Single entry point for rendering any PDF report.
+     * <ol>
+     *   <li>Creates the {@link PDDocument} and sets basic metadata (title/author).</li>
+     *   <li>Initializes the first page via {@link #newPage()}.</li>
+     *   <li>Delegates report-specific content to {@code contents.draw()}.</li>
+     *   <li>Closes the main stream and injects page footers (numbering).</li>
+     *   <li>Serializes the document to {@code byte[]} for storage.</li>
+     * </ol>
+     * IOExceptions are wrapped in IllegalStateException so no I/O exceptions leak
+     * into the application domain.
+     */
     protected byte[] renderDocument(String title, String reference, Contents contents) {
         reportTitle = title;
         reportReference = reference;
@@ -65,8 +96,14 @@ abstract class AbstractReportPdfRenderer {
         }
     }
 
+    /** Internal record representing one metric of the summary block (label, value and color). */
     protected record Metric(String label, String value, Color color) {}
 
+    /**
+     * Draws the top metric strip: splits the usable width into N equal cells,
+     * pre-wraps each value, and computes height so the block never clips text.
+     * Ensures the whole block fits on the page before drawing it.
+     */
     protected void metrics(List<Metric> metrics) throws IOException {
         float cellWidth = WIDTH / metrics.size();
         var lines = new ArrayList<List<String>>();
@@ -84,6 +121,11 @@ abstract class AbstractReportPdfRenderer {
         y += height + 9;
     }
 
+    /**
+     * Draws a horizontal bar chart for a {@code category -> count} map.
+     * Each bar is scaled proportionally to the maximum to allow relative comparison.
+     * Labels wrap into the left column, allowing variable row height.
+     */
     protected void countChart(String title, java.util.Map<String, Long> counts, Color color) throws IOException {
         ensure(66);
         text(title, MARGIN, y, 9, bold, MUTED);
@@ -134,6 +176,11 @@ abstract class AbstractReportPdfRenderer {
         y += height;
     }
 
+    /**
+     * Creates a new A4 page, draws the common header (brand, report title,
+     * multi-line reference and decorative rule) and resets the {@code y} cursor.
+     * If a stream was already open, it is closed to avoid resource leaks.
+     */
     protected void newPage() throws IOException {
         if (stream != null) stream.close();
         var page = new PDPage(PDRectangle.A4);
@@ -149,10 +196,18 @@ abstract class AbstractReportPdfRenderer {
         y += 21;
     }
 
+    /**
+     * Checks whether the requested height fits under the current cursor; if not,
+     * creates a new page. This is the shared pagination mechanism for all primitives.
+     */
     protected void ensure(float height) throws IOException {
         if (y + height > BOTTOM) newPage();
     }
 
+    /**
+     * Draws a numbered section header ("01", "02", ...) along with its title.
+     * Reserves 80px so a section title is never orphaned at the bottom of a page.
+     */
     protected void section(String number, String title) throws IOException {
         ensure(80);
         y += 9;
@@ -161,6 +216,16 @@ abstract class AbstractReportPdfRenderer {
         y += 24;
     }
 
+    /**
+     * Draws a two-dimensional table with a header row and per-column wrapped cells.
+     * Pagination strategy:
+     * <ul>
+     *   <li>Computes how many lines each cell occupies and, per row, the maximum across columns.</li>
+     *   <li>If a row does not fit, it is split across fragments; on each break the {@link #headerRow} is repeated.</li>
+     *   <li>If the whole row is too tall for any page, a break is forced beforehand to maximize space.</li>
+     * </ul>
+     * Rows alternate LIGHT/white background for readability.
+     */
     protected void table(List<String> headings, List<List<String>> rows, float[] fractions) throws IOException {
         ensure(54);
         headerRow(headings, fractions);
@@ -199,6 +264,10 @@ abstract class AbstractReportPdfRenderer {
         y += 8;
     }
 
+    /**
+     * Draws the table header row with a TEAL background and white text.
+     * Wraps each heading and sizes the height to the max across columns.
+     */
     protected void headerRow(List<String> headings, float[] fractions) throws IOException {
         var lines = new ArrayList<List<String>>();
         for (int i = 0; i < headings.size(); i++) lines.add(wrap(headings.get(i), WIDTH * fractions[i] - 16, 8, bold));
@@ -212,6 +281,10 @@ abstract class AbstractReportPdfRenderer {
         y += height;
     }
 
+    /**
+     * Writes a wrapped paragraph across the usable width, line by line, with page-break
+     * control between lines to avoid clipping. Leaves a small trailing gap after the paragraph.
+     */
     protected void paragraph(String value, Color color) throws IOException {
         for (var line : wrap(value, WIDTH, 9, regular)) {
             ensure(14);
@@ -221,6 +294,10 @@ abstract class AbstractReportPdfRenderer {
         y += 7;
     }
 
+    /**
+     * Walks over already-generated pages to inject the common footer (brand, legend and
+     * "Page X / N" numbering). Runs at the end, once total page count is known.
+     */
     protected void footers() throws IOException {
         int pageNumber = 0;
         for (var page : document.getPages()) {
@@ -235,6 +312,10 @@ abstract class AbstractReportPdfRenderer {
         stream = null;
     }
 
+    /**
+     * Text-drawing primitive with "top-based" coordinates (more intuitive than PDF Box native ones).
+     * Internally converts to PDF coordinates and sanitizes text via {@link #safe}.
+     */
     protected void text(String text, float x, float top, float size, PDType1Font font, Color color) throws IOException {
         stream.beginText();
         stream.setFont(font, size);
@@ -244,12 +325,14 @@ abstract class AbstractReportPdfRenderer {
         stream.endText();
     }
 
+    /** Filled-rectangle drawing primitive in top-based coordinates. */
     protected void rectangle(float x, float top, float width, float height, Color color) throws IOException {
         stream.setNonStrokingColor(color);
         stream.addRect(x, PDRectangle.A4.getHeight() - top - height, width, height);
         stream.fill();
     }
 
+    /** Horizontal rule (line) drawing primitive in top-based coordinates. */
     protected void rule(float x, float top, float width, Color color) throws IOException {
         stream.setStrokingColor(color);
         stream.setLineWidth(0.7f);
@@ -258,6 +341,14 @@ abstract class AbstractReportPdfRenderer {
         stream.stroke();
     }
 
+    /**
+     * Robust word-wrap algorithm for PDF Box:
+     * <ol>
+     *   <li>Respects explicit line breaks (\\R) in the original text.</li>
+     *   <li>Tries to break on word boundaries using {@link #width}.</li>
+     *   <li>If a word exceeds the width, it splits character by character (useful for SHA-256 hashes).</li>
+     * </ol>
+     */
     protected List<String> wrap(String input, float maxWidth, float size, PDType1Font font) throws IOException {
         var result = new ArrayList<String>();
         for (var paragraph : value(input).split("\\R", -1)) {
@@ -277,10 +368,22 @@ abstract class AbstractReportPdfRenderer {
         return result;
     }
 
+    /**
+     * Measures the width (in points) a text would occupy with the given font and size.
+     * Delegates to {@link #safe} to normalize characters before measuring.
+     */
     protected float width(String text, float size, PDType1Font font) throws IOException {
         return font.getStringWidth(safe(text, font)) / 1000 * size;
     }
 
+    /**
+     * Normalizes text for PDF Box Standard14 fonts (which only cover ISO-8859-1/WinAnsi):
+     * <ul>
+     *   <li>Replaces control characters with a space.</li>
+     *   <li>If the font cannot encode a character, replaces it with "[U+XXXX]" instead of
+     *       throwing an exception (prevents failures with emojis or exotic symbols in notes).</li>
+     * </ul>
+     */
     protected String safe(String input, PDType1Font font) throws IOException {
         var output = new StringBuilder();
         for (int point : value(input).codePoints().toArray()) {
@@ -292,16 +395,32 @@ abstract class AbstractReportPdfRenderer {
         return output.toString();
     }
 
+    /** Normalizes an object to non-blank text: null/blank becomes "Not recorded". */
     protected static String value(Object value) { return value == null || value.toString().isBlank() ? "Not recorded" : value.toString(); }
+
+    /** Formats a Double without scientific notation and trailing zeros; null -> "Not recorded". */
     protected static String number(Double value) { return value == null ? "Not recorded" : java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString(); }
+
+    /** Converts an enum-like identifier (SNAKE_CASE) into lowercase human-readable text. */
     protected static String human(String value) {
         return value(value).toLowerCase(Locale.ROOT).replace('_', ' ');
     }
+
+    /** Formats an ISO-8601 date (YYYY-MM-DD...) as "dd MMM uuuu" in English. */
     protected static String date(String value) {
         if (value == null || value.isBlank()) return "Not recorded";
         try { return LocalDate.parse(value.substring(0, 10)).format(DateTimeFormatter.ofPattern("dd MMM uuuu", Locale.ENGLISH)); }
         catch (RuntimeException invalid) { return value; }
     }
+
+    /**
+     * Formats ISO-8601 timestamps:
+     * <ul>
+     *   <li>With offset: normalized to UTC and labeled "UTC".</li>
+     *   <li>Without offset: parsed as LocalDateTime and displayed without zone.</li>
+     *   <li>If unparseable, returns the raw value (tolerates historical data).</li>
+     * </ul>
+     */
     protected static String timestamp(String value) {
         if (value == null || value.isBlank()) return "Not recorded";
         var format = DateTimeFormatter.ofPattern("dd MMM uuuu HH:mm 'UTC'", Locale.ENGLISH);
@@ -311,6 +430,8 @@ abstract class AbstractReportPdfRenderer {
             catch (DateTimeParseException invalid) { return value; }
         }
     }
+
+    /** Maps a batch status to its semantic color (green/red/amber). */
     protected static Color statusColor(String status) {
         if ("RELEASED".equals(status)) return GREEN;
         if ("REJECTED".equals(status)) return RED;

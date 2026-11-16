@@ -16,6 +16,9 @@ import java.time.Instant;
 
 /**
  * Reading of an IoT device stored in {@code telemetry_measurements}.
+ *
+ * <p>The index on device and time serves the period queries, the previous reading lookup and the detection of
+ * re-sent readings. The inherited {@code created_at} is the moment the platform received the reading.</p>
  */
 @Getter
 @Setter
@@ -47,9 +50,15 @@ public class MeasurementPersistenceEntity extends AuditableAbstractPersistenceEn
     @Column(nullable = false, length = 40)
     private String unit;
 
+    /**
+     * Moment of the reading as ISO-8601 text; the only moment kept by the oldest readings.
+     */
     @Column(nullable = false, length = 50)
     private String timestamp;
 
+    /**
+     * Moment of the reading; null for the readings stored before this column existed.
+     */
     private Instant measuredAt;
 
     @Enumerated(EnumType.STRING)

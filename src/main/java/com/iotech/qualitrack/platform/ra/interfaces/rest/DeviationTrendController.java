@@ -25,7 +25,17 @@ import org.springframework.web.bind.annotation.RestController;
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
- * Deviation indicators of the variables of an environment (US94, TS82).
+ * REST endpoint for querying deviation indicators per device and variable
+ * of an environment within a period (US94, TS82).
+ * Key semantics documented in the {@code @Operation} annotation:
+ * <ul>
+ *   <li><b>Time in range</b>: each evaluated reading keeps its condition until the next one;
+ *       percentage = NORMAL time / time between first and last evaluated reading.</li>
+ *   <li><b>Deviations</b>: readings worse than the previous one (not simply out-of-range).</li>
+ *   <li><b>Critical deviations</b>: readings that entered CRITICAL state.</li>
+ *   <li>Default period is the last 7 days, capped at 31.</li>
+ * </ul>
+ * If the environment does not exist or does not belong to the lab, returns 404 via ApplicationError.
  */
 @RestController
 @RequestMapping(value = "/api/v1/laboratories/{laboratoryId}/environments/{environmentId}/deviation-trends",
@@ -38,6 +48,11 @@ public class DeviationTrendController {
         this.raQueryService = raQueryService;
     }
 
+    /**
+     * Returns deviation trends for the environment.
+     * The period is normalized with {@link ReportingPeriodAssembler#toIndicatorPeriod}
+     * before building the query, centralizing date validations.
+     */
     @GetMapping
     @Operation(summary = "Get the deviation indicators of an environment",
             description = "Per device and variable of the environment in the period (by default the last 7 days, at most "
