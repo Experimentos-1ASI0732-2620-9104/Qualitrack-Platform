@@ -90,7 +90,10 @@ package "equipment.domain.model.aggregates" {
     - firmwareVersion: String
     + Equipment(command: RegisterEquipmentCommand)
     + Equipment(command: RegisterIotDeviceCommand)
+    + Equipment(command: RegisterEdgeGatewayCommand)
+    + {static} EDGE_GATEWAY_TYPE: String
     + isIotDevice(): boolean
+    + isEdgeGateway(): boolean
     + isDeviceOfType(type: IotDeviceType): boolean
     + belongsTo(laboratoryId: Long): boolean
     + isLocatedIn(laboratoryId: Long, environmentId: Long): boolean
@@ -220,6 +223,11 @@ package "equipment.domain.model.queries" {
   class GetEquipmentByDeviceIdQuery <<record>>
   class GetCalibrationAlertsByLabIdQuery <<record>>
   class GetBpmParameterConfigsByEquipmentIdQuery <<record>>
+  class GetEquipmentByEnvironmentIdQuery <<record>> {
+    + laboratoryId: Long
+    + environmentId: Long
+    + iotDevicesOnly: boolean
+  }
   class GetMaintenanceByEquipmentIdQuery <<record>> {
     + laboratoryId: Long
     + environmentId: Long
@@ -237,11 +245,31 @@ package "equipment.domain.model.events" {
   class MaintenanceRegisteredEvent <<record>>
 }
 
+package "equipment.domain.services" {
+  class EdgeGatewayAllocation <<record>> {
+    + {static} MAX_DEVICES_PER_EDGE_GATEWAY: int = 15
+    - deviceIdsByGatewayId: Map<Long, List<Long>>
+    - uncoveredDeviceIds: List<Long>
+    + {static} of(gatewayIds, deviceIds): EdgeGatewayAllocation
+    + {static} ofEnvironment(environmentEquipment): EdgeGatewayAllocation
+    + deviceIdsOf(gatewayId: Long): List<Long>
+  }
+}
+
+EdgeGatewayAllocation ..> Equipment : distributes IoT devices\namong Edge Gateways
+note bottom of EdgeGatewayAllocation
+  Only operational Gateways receive devices: a Gateway in maintenance or out of
+  service cannot connect, so its devices go to the next operational one or are
+  left without a Gateway. The device registry of the Edge and the tracking
+  endpoints of the Edge accept only the share of the Gateway.
+end note
+
 package "equipment.domain.repositories" {
   interface EquipmentRepository {
     + existsBySerialNumber(serialNumber): boolean
     + existsBySensorExternalId(sensorExternalId: DeviceId): boolean
     + existsOtherDeviceInEnvironment(environmentId, deviceType, equipmentId): boolean
+    + findAllByLabIdAndEnvironmentId(labId, environmentId): List<Equipment>
   }
   interface EquipmentStatusChangeRepository
   interface BpmParameterConfigRepository
@@ -257,6 +285,7 @@ package "equipment.application.commandservices" {
   interface EquipmentCommandService {
     + handle(RegisterEquipmentCommand): Result<Equipment>
     + handle(RegisterIotDeviceCommand): Result<Equipment>
+    + handle(RegisterEdgeGatewayCommand): Result<Equipment>
     + handle(AssignEquipmentToEnvironmentCommand): Result<Equipment>
     + handle(ChangeEquipmentStatusCommand): Result<EquipmentStatusChange>
     + handle(LinkSensorCommand): Result<Long>
@@ -268,7 +297,9 @@ package "equipment.application.commandservices" {
 }
 
 package "equipment.application.queryservices" {
-  interface EquipmentQueryService
+  interface EquipmentQueryService {
+    + handle(GetEquipmentByEnvironmentIdQuery): Optional<List<Equipment>>
+  }
   interface BpmConfigQueryService
   interface MaintenanceQueryService {
     + handle(GetMaintenanceByEquipmentIdQuery): Optional<List<MaintenanceRecord>>
@@ -345,6 +376,7 @@ package "equipment.application.internal.outboundservices.acl" {
 }
 
 EquipmentCommandServiceImpl --> ExternalLabService
+EquipmentQueryServiceImpl --> ExternalLabService : environment of the laboratory
 
 ExternalLabService --> LaboratoryContextFacade
 
@@ -355,9 +387,30 @@ package "equipment.interfaces.acl" {
     + findEnvironmentalDevice(laboratoryId, environmentId): Optional<DeviceReference>
     + findContainerMonitor(laboratoryId, deviceId): Optional<ContainerReference>
     + findDevices(laboratoryId): List<DeviceReference>
+    + findLaboratoryEquipment(laboratoryId): List<EquipmentReference>
+    + findEquipmentLog(laboratoryId, environmentId, equipmentId): Optional<EquipmentLogReference>
+    + findEdgeGateway(laboratoryId, equipmentId): Optional<EdgeGatewayReference>
+    + findEdgeGatewayByExternalId(sensorExternalId): Optional<EdgeGatewayReference>
+    + isServedByEdgeGateway(laboratoryId, environmentId, gatewayEquipmentId, deviceId): boolean
   }
+  class EdgeGatewayReference <<record>>
   class EquipmentReference <<record>>
   class DeviceReference <<record>>
+  class EquipmentLogReference <<record>> {
+    + id: Long
+    + laboratoryId: Long
+    + environmentId: Long
+    + name: String
+    + type: String
+    + model: String
+    + serialNumber: String
+    + status: String
+    + sensorExternalId: String
+    + parameters: List<ParameterRange>
+    + maintenance: List<MaintenanceEntry>
+  }
+  class ParameterRange <<record>>
+  class MaintenanceEntry <<record>>
   class ContainerReference <<record>> {
     + id: Long
     + laboratoryId: Long
@@ -378,7 +431,16 @@ package "equipment.application.acl" {
 
 EquipmentContextFacadeImpl ..|> EquipmentContextFacade
 EquipmentContextFacadeImpl --> EquipmentQueryService
+EquipmentContextFacadeImpl --> BpmConfigQueryService
+EquipmentContextFacadeImpl --> MaintenanceQueryService
 EquipmentContextFacade ..> ContainerReference
+EquipmentContextFacade ..> EquipmentLogReference
+EquipmentLogReference *-- ParameterRange
+EquipmentLogReference *-- MaintenanceEntry
+note bottom of EquipmentLogReference
+  Equipment located in an environment with its BPM ranges and
+  maintenance history, read by the equipment log report of Reporting.
+end note
 note bottom of ContainerReference
   Container monitor where Inventory stores raw material lots and
   Product Batch stores batches (US43, US78); only OPERATIONAL
@@ -526,6 +588,14 @@ EquipmentTypePersistenceConverter ..> EquipmentType
 package "equipment.interfaces.rest.resources" {
   class RegisterEquipmentResource <<record>>
   class RegisterIotDeviceResource <<record>>
+  class RegisterEdgeGatewayResource <<record>>
+  class EdgeGatewayIotDeviceResource <<record>>
+  class EdgeGatewayCoverageResource <<record>> {
+    + maxDevicesPerGateway: int
+    + deviceCount: int
+    + uncoveredDeviceCount: int
+    + gateways: List<Gateway>
+  }
   class AssignEquipmentResource <<record>>
   class AssignDeviceResource <<record>>
   class ChangeEquipmentStatusResource <<record>>
@@ -540,6 +610,8 @@ package "equipment.interfaces.rest.resources" {
 package "equipment.interfaces.rest.transform" {
   class RegisterEquipmentCommandFromResourceAssembler
   class RegisterIotDeviceCommandFromResourceAssembler
+  class RegisterEdgeGatewayCommandFromResourceAssembler
+  class EdgeGatewayCoverageResourceFromEntityAssembler
   class ChangeEquipmentStatusCommandFromResourceAssembler
   class EquipmentResourceFromEntityAssembler
   class EquipmentStatusChangeResourceFromEntityAssembler
@@ -554,6 +626,9 @@ RegisterEquipmentCommandFromResourceAssembler ..> RegisterEquipmentCommand
 RegisterIotDeviceCommandFromResourceAssembler ..> RegisterIotDeviceCommand
 ChangeEquipmentStatusCommandFromResourceAssembler ..> ChangeEquipmentStatusCommand
 EquipmentResourceFromEntityAssembler ..> EquipmentResource
+RegisterEdgeGatewayCommandFromResourceAssembler ..> RegisterEdgeGatewayCommand
+EdgeGatewayCoverageResourceFromEntityAssembler ..> EdgeGatewayCoverageResource
+EdgeGatewayCoverageResourceFromEntityAssembler ..> EdgeGatewayAllocation
 EquipmentStatusChangeResourceFromEntityAssembler ..> EquipmentStatusChangeResource
 ConfigureBpmCommandFromResourceAssembler ..> ConfigureBpmParametersCommand
 BpmConfigResourceFromEntityAssembler ..> BpmParameterConfigResource
@@ -567,12 +642,33 @@ package "equipment.interfaces.rest" {
   class EnvironmentDevicesController
   class EquipmentMaintenanceController
   class EquipmentBpmConfigController
+  class LaboratoryEdgeGatewayController
+  class EdgeGatewayDevicesController
+  class EnvironmentEdgeGatewayCoverageController
 }
+
+LaboratoryEdgeGatewayController --> EquipmentCommandService
+EdgeGatewayDevicesController --> EquipmentQueryService
+EdgeGatewayDevicesController ..> EdgeGatewayAllocation
+EdgeGatewayDevicesController ..> EdgeGatewayIotDeviceResource
+EnvironmentEdgeGatewayCoverageController --> EquipmentQueryService
+EnvironmentEdgeGatewayCoverageController ..> EdgeGatewayCoverageResourceFromEntityAssembler
+
+note bottom of EdgeGatewayDevicesController
+  /api/v1/laboratories/{laboratoryId}/edge-gateways
+      POST registers an Edge Gateway: equipment of type EDGE_GATEWAY with an external identifier
+  .../environments/{environmentId}/edge-gateway-coverage
+      GET Gateways of the environment, devices each one serves and devices without a Gateway
+  /api/v1/edge-gateways/{deviceId}/iot-devices                  (X-API-Key, ROLE_EDGE_GATEWAY)
+      GET the IoT devices the Gateway serves: 15 at most, taken by identifier
+      among the Gateways of its environment
+end note
 
 LaboratoryEquipmentController --> EquipmentCommandService
 LaboratoryEquipmentController --> EquipmentQueryService
 LaboratoryDevicesController --> EquipmentCommandService
 EnvironmentEquipmentController --> EquipmentCommandService
+EnvironmentEquipmentController --> EquipmentQueryService
 EnvironmentDevicesController --> EquipmentCommandService
 EquipmentMaintenanceController --> MaintenanceCommandService
 EquipmentMaintenanceController --> MaintenanceQueryService
@@ -589,6 +685,7 @@ note bottom of LaboratoryEquipmentController
   /api/v1/laboratories/{laboratoryId}/devices/environmental-devices           (TS37)
   /api/v1/laboratories/{laboratoryId}/devices/container-monitors              (TS39)
   .../environments/{environmentId}/equipments                                 (TS33)
+      GET lists the equipment of the environment by name; ?iot=true keeps its IoT devices (Edge)
   .../environments/{environmentId}/equipments/{equipmentId}/status-changes    (TS34)
   .../environments/{environmentId}/equipments/{equipmentId}/maintenance-records (TS35, TS36)
   .../environments/{environmentId}/environmental-devices                      (TS38)
