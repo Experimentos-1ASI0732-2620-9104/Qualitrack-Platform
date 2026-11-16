@@ -26,18 +26,27 @@ public class EnvironmentalDeviationComplianceEventHandler {
     public void on(EnvironmentalDeviationDetectedIntegrationEvent event) {
         log.warn("CA received an environmental deviation: device={}, metric={}, value={} {}, state={}, limit={}",
                 event.deviceId(), event.metric(), event.value(), event.unit(), event.state(), event.thresholdValue());
-        var result = caCommandService.handle(new CreateDeviationAlertCommand(
-                event.laboratoryId(),
-                event.environmentId(),
-                event.deviceId(),
-                event.measurementId(),
-                event.metric(),
-                event.value(),
-                event.thresholdValue(),
-                event.unit(),
-                AlertSeverity.valueOf(event.state()),
-                event.measuredAt()
-        ));
+        CreateDeviationAlertCommand command;
+        try {
+            command = new CreateDeviationAlertCommand(
+                    event.laboratoryId(),
+                    event.environmentId(),
+                    event.deviceId(),
+                    event.measurementId(),
+                    event.metric(),
+                    event.value(),
+                    event.thresholdValue(),
+                    event.unit(),
+                    AlertSeverity.valueOf(event.state()),
+                    event.measuredAt()
+            );
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            // An invalid deviation must not fail the reading that Tracking is storing.
+            log.error("CA ignored an invalid environmental deviation of device {}: {}", event.deviceId(),
+                    exception.getMessage());
+            return;
+        }
+        var result = caCommandService.handle(command);
         if (result.isFailure()) {
             log.error("CA could not register the environmental deviation of device {}: {}", event.deviceId(), result);
         }

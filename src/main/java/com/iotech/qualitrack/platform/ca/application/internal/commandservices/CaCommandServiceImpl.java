@@ -25,6 +25,7 @@ import com.iotech.qualitrack.platform.shared.application.result.Result;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -43,19 +44,22 @@ public class CaCommandServiceImpl implements CaCommandService {
     private final NotificationPreferenceRepository notificationPreferenceRepository;
     private final CaExternalEquipmentService caExternalEquipmentService;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock complianceClock;
 
     public CaCommandServiceImpl(
             DeviationAlertRepository deviationAlertRepository,
             ComplianceEventRepository complianceEventRepository,
             NotificationPreferenceRepository notificationPreferenceRepository,
             CaExternalEquipmentService caExternalEquipmentService,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            Clock complianceClock
     ) {
         this.deviationAlertRepository = deviationAlertRepository;
         this.complianceEventRepository = complianceEventRepository;
         this.notificationPreferenceRepository = notificationPreferenceRepository;
         this.caExternalEquipmentService = caExternalEquipmentService;
         this.eventPublisher = eventPublisher;
+        this.complianceClock = complianceClock;
     }
 
     @Override
@@ -81,7 +85,7 @@ public class CaCommandServiceImpl implements CaCommandService {
                         "%s deviation of '%s' (%s %s) added to the open alert; %d deviations in the incident.".formatted(
                                 command.severity(), updatedAlert.getParameterName(), command.recordedValue(),
                                 updatedAlert.getUnit(), updatedAlert.getDeviationCount()),
-                        Instant.now().toString(),
+                        Instant.now(complianceClock).toString(),
                         null
                 ));
 
@@ -98,7 +102,7 @@ public class CaCommandServiceImpl implements CaCommandService {
                     savedAlert.getId(),
                     ComplianceEventType.DEVIATION_ALERT_CREATED,
                     "Deviation alert created for parameter '%s' of '%s'.".formatted(savedAlert.getParameterName(), device.name()),
-                    Instant.now().toString(),
+                    Instant.now(complianceClock).toString(),
                     null
             ));
 
@@ -127,7 +131,7 @@ public class CaCommandServiceImpl implements CaCommandService {
                 ComplianceEventType.DEVIATION_CONDITION_NORMALIZED,
                 "Condition of '%s' back to normal; the alert stays open until it is resolved."
                         .formatted(updatedAlert.getParameterName()),
-                Instant.now().toString(),
+                Instant.now(complianceClock).toString(),
                 null
         ));
         return Optional.of(updatedAlert);
@@ -147,7 +151,7 @@ public class CaCommandServiceImpl implements CaCommandService {
         try {
             var alert = alertResult.get();
 
-            alert.acknowledge(command, Instant.now());
+            alert.acknowledge(command, Instant.now(complianceClock));
 
             var updatedAlert = deviationAlertRepository.save(alert);
 
@@ -155,7 +159,7 @@ public class CaCommandServiceImpl implements CaCommandService {
                     updatedAlert.getId(),
                     ComplianceEventType.DEVIATION_ALERT_ACKNOWLEDGED,
                     "Deviation alert acknowledged.",
-                    Instant.now().toString(),
+                    Instant.now(complianceClock).toString(),
                     updatedAlert.getAcknowledgedBy()
             ));
 
@@ -187,7 +191,7 @@ public class CaCommandServiceImpl implements CaCommandService {
         try {
             var alert = alertResult.get();
 
-            alert.resolve(command, Instant.now());
+            alert.resolve(command, Instant.now(complianceClock));
 
             var updatedAlert = deviationAlertRepository.save(alert);
 
@@ -195,7 +199,7 @@ public class CaCommandServiceImpl implements CaCommandService {
                     updatedAlert.getId(),
                     ComplianceEventType.DEVIATION_ALERT_RESOLVED,
                     "Deviation alert resolved: %s".formatted(updatedAlert.getResolutionNotes()),
-                    Instant.now().toString(),
+                    Instant.now(complianceClock).toString(),
                     updatedAlert.getResolvedBy()
             ));
 
@@ -227,7 +231,7 @@ public class CaCommandServiceImpl implements CaCommandService {
                     updatedPreference.getUserId(),
                     ComplianceEventType.NOTIFICATION_PREFERENCE_UPDATED,
                     "Notification preferences updated.",
-                    Instant.now().toString(),
+                    Instant.now(complianceClock).toString(),
                     updatedPreference.getUserId()
             ));
 

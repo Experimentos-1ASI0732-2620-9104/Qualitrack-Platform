@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Instant;
 
 /**
@@ -18,14 +19,16 @@ import java.time.Instant;
 public class BatchRejectedComplianceEventHandler {
 
     private final ComplianceEventRepository complianceEventRepository;
+    private final Clock complianceClock;
 
     /**
      * Creates a new BatchRejectedComplianceEventHandler.
      *
      * @param complianceEventRepository compliance event repository
      */
-    public BatchRejectedComplianceEventHandler(ComplianceEventRepository complianceEventRepository) {
+    public BatchRejectedComplianceEventHandler(ComplianceEventRepository complianceEventRepository, Clock complianceClock) {
         this.complianceEventRepository = complianceEventRepository;
+        this.complianceClock = complianceClock;
     }
 
     /**
@@ -41,7 +44,7 @@ public class BatchRejectedComplianceEventHandler {
                 event.batchId(),
                 ComplianceEventType.BATCH_REJECTED,
                 "Batch '%s' was rejected. Reason: %s.".formatted(event.batchNumber(), event.reason()),
-                Instant.now().toString(),
+                Instant.now(complianceClock).toString(),
                 null
         ));
     }

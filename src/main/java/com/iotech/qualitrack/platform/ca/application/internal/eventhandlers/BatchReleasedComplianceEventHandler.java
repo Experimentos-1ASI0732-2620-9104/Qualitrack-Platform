@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Instant;
 
 /**
@@ -18,14 +19,16 @@ import java.time.Instant;
 public class BatchReleasedComplianceEventHandler {
 
     private final ComplianceEventRepository complianceEventRepository;
+    private final Clock complianceClock;
 
     /**
      * Creates a new BatchReleasedComplianceEventHandler.
      *
      * @param complianceEventRepository compliance event repository
      */
-    public BatchReleasedComplianceEventHandler(ComplianceEventRepository complianceEventRepository) {
+    public BatchReleasedComplianceEventHandler(ComplianceEventRepository complianceEventRepository, Clock complianceClock) {
         this.complianceEventRepository = complianceEventRepository;
+        this.complianceClock = complianceClock;
     }
 
     /**
@@ -41,7 +44,7 @@ public class BatchReleasedComplianceEventHandler {
                 event.batchId(),
                 ComplianceEventType.BATCH_RELEASED,
                 "Batch '%s' was released on %s.".formatted(event.batchNumber(), event.releaseDate()),
-                Instant.now().toString(),
+                Instant.now(complianceClock).toString(),
                 null
         ));
     }
