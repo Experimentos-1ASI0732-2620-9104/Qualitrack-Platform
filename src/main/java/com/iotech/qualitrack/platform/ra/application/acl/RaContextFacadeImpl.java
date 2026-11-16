@@ -35,24 +35,25 @@ public class RaContextFacadeImpl implements RaContextFacade {
     /**
      * Records an audit log entry through the RA application layer.
      *
-     * @param action The performed audit action.
+     * @param action The performed audit action, for example CREATE, UPDATE, RELEASE or GENERATE.
      * @param entityType The affected entity type.
      * @param entityId The affected entity identifier.
      * @param performedBy The actor identifier.
      * @param details Optional action details.
-     * @return true if the entry was recorded successfully.
+     * @return true if the entry was recorded successfully; false when the action or the data are not valid.
      */
     @Override
     public boolean recordAuditLog(
-            AuditAction action,
+            String action,
             String entityType,
             Long entityId,
             Long performedBy,
             String details
     ) {
+        if (action == null) return false;
         try {
             var command = new RecordAuditLogEntryCommand(
-                    action,
+                    AuditAction.valueOf(action.trim().toUpperCase(java.util.Locale.ROOT)),
                     entityType,
                     entityId,
                     performedBy,

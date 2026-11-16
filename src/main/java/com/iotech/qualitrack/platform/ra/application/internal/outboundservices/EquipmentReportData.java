@@ -15,7 +15,18 @@ public record EquipmentReportData(Long equipmentId, String name, String laborato
         entries = List.copyOf(entries);
     }
 
+    /**
+     * Configured limit for one parameter at export time. {@code minimum}/{@code maximum}
+     * are null when the limit is unbounded on that side.
+     */
     public record Parameter(String name, Double minimum, Double maximum, String unit) {}
+
+    /** Maintenance intervention performed within the report period. */
     public record Maintenance(Long id, String date, String type, String technician, String description) {}
+
+    /**
+     * One audit trail entry, filtered to the report period.
+     * {@code actorId == null} means "system"; {@code action} is the enum name as a string.
+     */
     public record LogEntry(Long id, String recordedAt, String action, Long actorId, String details) {}
 }

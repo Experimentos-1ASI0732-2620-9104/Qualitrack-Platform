@@ -22,16 +22,25 @@ public record BatchReportData(
     public record Material(Long id, String name, Long lotId, Double quantity, String unit, String usedOn,
                            String stockBefore, String stockAfter) {}
 
+    /** Equipment linked to the batch. */
     public record Equipment(Long id, String name, String registeredAt) {}
 
+    /** Staff member linked to the batch. */
     public record Staff(Long id, String name, String role, String registeredAt) {}
 
+    /** Container the batch is stored in. */
     public record Container(Long id, String name, Long environmentId, String assignedAt) {}
 
+    /** Release signature of the batch. */
     public record Release(Long signedBy, String signatureHash, String signedAt) {}
 
+    /** Rejection details of the batch. */
     public record Rejection(String rejectionDate, String reason) {}
 
+    /**
+     * Alert recorded for the batch, projected as a report deviation. Counts as a
+     * "deviation" only in the report sense; the renderer clarifies this in the scope.
+     */
     public record Deviation(Long id, Long equipmentId, String parameter, Double value,
                             Double threshold, String unit, String recordedAt, String severity,
                             String status, String resolution) {}

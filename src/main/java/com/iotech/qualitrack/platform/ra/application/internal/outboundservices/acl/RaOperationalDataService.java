@@ -1,70 +1,70 @@
 package com.iotech.qualitrack.platform.ra.application.internal.outboundservices.acl;
 
-import com.iotech.qualitrack.platform.batch.domain.model.aggregates.Batch;
-import com.iotech.qualitrack.platform.batch.domain.model.valueobjects.BatchStatus;
-import com.iotech.qualitrack.platform.batch.domain.repositories.BatchRepository;
-import com.iotech.qualitrack.platform.batch.domain.repositories.RawMaterialUsageRepository;
 import com.iotech.qualitrack.platform.batch.interfaces.acl.BatchContextFacade;
-import com.iotech.qualitrack.platform.laboratory.domain.repositories.LaboratoryRepository;
+import com.iotech.qualitrack.platform.ca.interfaces.acl.ComplianceContextFacade;
+import com.iotech.qualitrack.platform.equipment.interfaces.acl.EquipmentContextFacade;
 import com.iotech.qualitrack.platform.ra.application.internal.outboundservices.BatchReportData;
 import com.iotech.qualitrack.platform.ra.application.internal.outboundservices.EquipmentReportData;
-import com.iotech.qualitrack.platform.equipment.domain.repositories.MaintenanceRepository;
-import com.iotech.qualitrack.platform.ra.domain.model.entities.AuditLogEntry;
-import com.iotech.qualitrack.platform.ca.domain.model.aggregates.DeviationAlert;
-import com.iotech.qualitrack.platform.ca.domain.model.valueobjects.AlertStatus;
-import com.iotech.qualitrack.platform.ca.domain.repositories.DeviationAlertRepository;
-import com.iotech.qualitrack.platform.equipment.domain.model.aggregates.Equipment;
-import com.iotech.qualitrack.platform.equipment.domain.repositories.BpmParameterConfigRepository;
-import com.iotech.qualitrack.platform.equipment.domain.repositories.EquipmentRepository;
 import com.iotech.qualitrack.platform.ra.domain.model.aggregates.KpiDashboard;
+import com.iotech.qualitrack.platform.ra.domain.model.entities.AuditLogEntry;
 import com.iotech.qualitrack.platform.ra.domain.model.entities.KpiMetric;
 import com.iotech.qualitrack.platform.ra.domain.model.valueobjects.KpiMetricStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-/** Reads operational records without manufacturing observations or regulatory targets. */
+/**
+ * Translates the records that Product Batch, Equipment, Compliance and Laboratory share through their facades into
+ * the data of the batch and equipment reports and the operational counts of the indicators, without manufacturing
+ * observations or regulatory targets.
+ */
 @Service
 @Transactional(readOnly = true)
 public class RaOperationalDataService {
-    private final EquipmentRepository equipment;
-    private final BatchRepository batches;
-    private final DeviationAlertRepository alerts;
-    private final BpmParameterConfigRepository configurations;
-    private final RawMaterialUsageRepository materialUsages;
-    private final LaboratoryRepository laboratories;
-    private final MaintenanceRepository maintenance;
+    private final RaExternalBatchService batches;
+    private final RaExternalEquipmentService equipment;
+    private final RaExternalComplianceService compliance;
+    private final RaExternalLaboratoryService laboratories;
 
-    public RaOperationalDataService(EquipmentRepository equipment, BatchRepository batches,
-            DeviationAlertRepository alerts,
-            BpmParameterConfigRepository configurations, RawMaterialUsageRepository materialUsages,
-            LaboratoryRepository laboratories, MaintenanceRepository maintenance) {
-        this.equipment = equipment;
+    public RaOperationalDataService(RaExternalBatchService batches, RaExternalEquipmentService equipment,
+            RaExternalComplianceService compliance, RaExternalLaboratoryService laboratories) {
         this.batches = batches;
-        this.alerts = alerts;
-        this.configurations = configurations;
-        this.materialUsages = materialUsages;
+        this.equipment = equipment;
+        this.compliance = compliance;
         this.laboratories = laboratories;
-        this.maintenance = maintenance;
     }
 
-    public BatchReportData batchReport(Batch batch, List<DeviationAlert> recordedAlerts,
+    /**
+     * Alerts recorded for a batch, as the deviations of its report.
+     */
+    public List<BatchReportData.Deviation> batchDeviations(Long batchId) {
+        return compliance.findBatchAlerts(batchId).stream()
+                .map(item -> new BatchReportData.Deviation(item.id(), item.deviceId(), item.parameterName(),
+                        item.recordedValue(), item.thresholdValue(), item.unit(), item.recordedAt(), item.severity(),
+                        item.status(), item.resolutionNotes())).toList();
+    }
+
+    /**
+     * Assembles the batch report snapshot. Traceability short-circuits redundant queries:
+     * materials fall back to {@code findMaterialUses} when traceability is absent,
+     * while equipment/staff default to empty lists to avoid extra calls.
+     */
+    public BatchReportData batchReport(BatchContextFacade.BatchReference batch, List<BatchReportData.Deviation> deviations,
             boolean includeDeviations, Optional<BatchContextFacade.TraceabilityReference> traceability,
-            String generatedBy, java.time.Instant generatedAt) {
-        var laboratory = laboratories.findById(batch.getLabId()).orElseThrow();
-        var materials = traceability.map(trace -> trace.materials().stream()
-                        .map(item -> new BatchReportData.Material(item.rawMaterialId(), item.name(), item.lotId(),
-                                item.quantity(), item.unit(), item.usedOn(), quantity(item.stockBefore()),
-                                quantity(item.stockAfter()))).toList())
-                .orElseGet(() -> materialUsages.findAllByBatchId(batch.getId()).stream()
-                        .map(item -> new BatchReportData.Material(item.getRawMaterialId(), item.getRawMaterialName(),
-                                item.getInventoryReceiptId(), item.getQuantityUsed(), item.getUnit(), item.getUsageDate(),
-                                quantity(item.getStockBefore()), quantity(item.getStockAfter()))).toList());
+            String generatedBy, Instant generatedAt) {
+        var materials = traceability.map(BatchContextFacade.TraceabilityReference::materials)
+                .orElseGet(() -> batches.findMaterialUses(batch.id())).stream()
+                .map(item -> new BatchReportData.Material(item.rawMaterialId(), item.name(), item.lotId(),
+                        item.quantity(), item.unit(), item.usedOn(), quantity(item.stockBefore()),
+                        quantity(item.stockAfter()))).toList();
         var equipment = traceability.map(trace -> trace.equipment().stream()
                 .map(item -> new BatchReportData.Equipment(item.equipmentId(), item.name(), item.registeredAt())).toList())
                 .orElse(List.of());
@@ -78,81 +78,69 @@ public class RaOperationalDataService {
                 .map(item -> new BatchReportData.Release(item.signedByUserId(), item.signatureHash(), item.signedAt())).orElse(null);
         var rejection = traceability.map(BatchContextFacade.TraceabilityReference::rejection)
                 .map(item -> new BatchReportData.Rejection(item.rejectionDate(), item.reason())).orElse(null);
-        var deviations = includeDeviations ? recordedAlerts.stream()
-                .map(item -> new BatchReportData.Deviation(item.getId(), item.getEquipmentId(), item.getParameterName(),
-                        item.getRecordedValue(), item.getThresholdValue(), item.getUnit(), item.getTimestamp(),
-                        item.getSeverity().name(), item.getStatus().name(), item.getResolutionNotes())).toList()
-                : List.<BatchReportData.Deviation>of();
-        return new BatchReportData(laboratory.getName().name(), batch.getId(), batch.getBatchNumber(),
-                batch.getProductName(), batch.getQuantity(), batch.getUnit(), batch.getStatus().name(),
-                batch.getStartDate(), batch.getEndDate(), batch.getNotes(), materials, equipment, staff, container,
-                release, rejection, includeDeviations, deviations, generatedBy, generatedAt);
+        return new BatchReportData(laboratories.laboratoryName(batch.laboratoryId()), batch.id(), batch.batchNumber(),
+                batch.productName(), batch.quantity(), batch.unit(), batch.status(), batch.startDate(), batch.endDate(),
+                batch.notes(), materials, equipment, staff, container, release, rejection, includeDeviations,
+                includeDeviations ? deviations : List.of(), generatedBy, generatedAt);
     }
 
-    private static String quantity(java.math.BigDecimal value) {
+    /** Formats a BigDecimal quantity without trailing zeros; null is preserved (not turned into 0). */
+    private static String quantity(BigDecimal value) {
         return value == null ? null : value.stripTrailingZeros().toPlainString();
     }
 
-    public String laboratoryName(Long laboratoryId) {
-        return laboratories.findById(laboratoryId).orElseThrow().getName().name();
-    }
-
-    public EquipmentReportData equipmentReport(Equipment device, String from, String to,
-            List<AuditLogEntry> recordedEntries, String generatedBy, java.time.Instant generatedAt) {
-        var start = java.time.LocalDate.parse(from.substring(0, 10));
-        var end = java.time.LocalDate.parse(to.substring(0, 10));
-        var parameters = configurations.findAllByEquipmentId(device.getId()).stream()
-                .map(item -> new EquipmentReportData.Parameter(item.getParameterName().name(), item.getMinValue(),
-                        item.getMaxValue(), item.getUnit())).toList();
-        var interventions = maintenance.findAllByEquipmentId(device.getId()).stream()
-                .filter(item -> item.getMaintenanceDate() != null && !item.getMaintenanceDate().isBefore(start)
-                        && !item.getMaintenanceDate().isAfter(end))
-                .sorted(Comparator.comparing(item -> item.getMaintenanceDate()))
-                .map(item -> new EquipmentReportData.Maintenance(item.getId(), item.getMaintenanceDate().toString(),
-                        item.getType().name(), item.getTechnicianName(), item.getDescription())).toList();
+    /**
+     * Assembles the equipment report snapshot. Maintenance entries are filtered to the
+     * [from, to] window and sorted chronologically, as are audit entries.
+     */
+    public EquipmentReportData equipmentReport(EquipmentContextFacade.EquipmentLogReference device, String from, String to,
+            List<AuditLogEntry> recordedEntries, String generatedBy, Instant generatedAt) {
+        var start = LocalDate.parse(from.substring(0, 10));
+        var end = LocalDate.parse(to.substring(0, 10));
+        var parameters = device.parameters().stream()
+                .map(item -> new EquipmentReportData.Parameter(item.parameterName(), item.minValue(), item.maxValue(),
+                        item.unit())).toList();
+        var interventions = device.maintenance().stream()
+                .filter(item -> item.performedOn() != null && !item.performedOn().isBefore(start)
+                        && !item.performedOn().isAfter(end))
+                .sorted(Comparator.comparing(EquipmentContextFacade.MaintenanceEntry::performedOn))
+                .map(item -> new EquipmentReportData.Maintenance(item.id(), item.performedOn().toString(), item.type(),
+                        item.technicianName(), item.description())).toList();
         var entries = recordedEntries.stream().sorted(Comparator.comparing(AuditLogEntry::getTimestamp))
                 .map(item -> new EquipmentReportData.LogEntry(item.getId(), item.getTimestamp(), item.getAction().name(),
                         item.getPerformedBy(), item.getDetails())).toList();
-        return new EquipmentReportData(device.getId(), device.getName(),
-                laboratories.findById(device.getLabId()).orElseThrow().getName().name(), device.getType().name(),
-                device.getModel(), device.getSerialNumber(), device.getStatus().name(),
-                device.getSensorExternalId() == null ? null : device.getSensorExternalId().value(), from, to,
+        return new EquipmentReportData(device.id(), device.name(), laboratories.laboratoryName(device.laboratoryId()),
+                device.type(), device.model(), device.serialNumber(), device.status(), device.sensorExternalId(), from, to,
                 parameters, interventions, entries, generatedBy, generatedAt);
     }
 
+    /**
+     * Assembles the equipment report snapshot. Maintenance entries are filtered to the
+     * [from, to] window and sorted chronologically, as are audit entries.
+     */
     public KpiDashboard dashboard(Long laboratoryId) {
-        var devices = equipment.findAllByLabId(laboratoryId);
-        var lots = batches.findAllByLabId(laboratoryId);
+        var devices = equipment.equipmentIds(laboratoryId);
+        var lots = batches.findBatches(laboratoryId);
         var metrics = new ArrayList<KpiMetric>();
         var recordedAt = LocalDateTime.now().toString();
         if (!devices.isEmpty()) {
             metrics.add(count("equipment-count", devices.size(), recordedAt));
-            var recordedAlerts = devices.stream()
-                    .flatMap(device -> alerts.findAllByEquipmentId(device.getId()).stream()).toList();
+            var recordedAlerts = compliance.findDeviceAlerts(devices);
             if (!recordedAlerts.isEmpty()) {
                 metrics.add(count("unresolved-alert-count", recordedAlerts.stream()
-                        .filter(alert -> alert.getStatus() != AlertStatus.RESOLVED).count(), recordedAt));
+                        .filter(ComplianceContextFacade.AlertReference::isOpen).count(), recordedAt));
             }
         }
         if (!lots.isEmpty()) {
             metrics.add(count("batch-count", lots.size(), recordedAt));
             metrics.add(count("released-batch-count", lots.stream()
-                    .filter(batch -> batch.getStatus() == BatchStatus.RELEASED).count(), recordedAt));
+                    .filter(BatchContextFacade.BatchReference::isReleased).count(), recordedAt));
         }
         return new KpiDashboard(null, laboratoryId, recordedAt, null, List.copyOf(metrics));
     }
 
+    /** Builds a "count" metric with no target and UNKNOWN status. */
     private KpiMetric count(String name, long value, String at) {
         return new KpiMetric(null, name, (double) value, "count", null, KpiMetricStatus.UNKNOWN, at);
     }
-
-    public Batch batch(Long id) {
-        return batches.findById(id).orElseThrow(() -> new IllegalArgumentException("Batch does not exist"));
-    }
-
-    public Equipment equipment(Long id) {
-        return equipment.findById(id).orElseThrow(() -> new IllegalArgumentException("Equipment does not exist"));
-    }
-
-    public List<DeviationAlert> batchAlerts(Long id) { return alerts.findAllByBatchId(id); }
 }
