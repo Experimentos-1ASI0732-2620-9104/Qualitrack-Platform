@@ -24,6 +24,24 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
+
+/**
+ * Implements the public integration boundary
+ * of the Inventory bounded context.
+ *
+ * <p>Provides operations used by other bounded contexts
+ * to consume raw material stock, verify material ownership
+ * and retrieve inventory information.</p>
+ *
+ * <p>Coordinates application services and translates
+ * internal inventory results into shared integration
+ * contract representations.</p>
+ *
+ * <p>Callers do not need direct access to Inventory
+ * repositories or persistence entities.</p>
+ *
+ * @see com.iotech.qualitrack.platform.inventory.interfaces.acl.InventoryContextFacade
+ */
 @Service
 public class InventoryContextFacadeImpl implements InventoryContextFacade {
     private final InventoryCommandService commands;
@@ -32,6 +50,16 @@ public class InventoryContextFacadeImpl implements InventoryContextFacade {
     private final Clock clock;
     private final NearExpiryPeriod nearExpiryPeriod;
 
+
+    /**
+     * Initializes the Inventory integration facade.
+     *
+     * @param commands the inventory command service
+     * @param queries the inventory query service
+     * @param repository the inventory repository
+     * @param inventoryClock the clock used for business dates
+     * @param nearExpiryPeriod the configured expiration monitoring period
+     */
     public InventoryContextFacadeImpl(InventoryCommandService commands, InventoryQueryService queries, InventoryRepository repository,
                                       Clock inventoryClock, NearExpiryPeriod nearExpiryPeriod) {
         this.commands = commands;
@@ -41,6 +69,14 @@ public class InventoryContextFacadeImpl implements InventoryContextFacade {
         this.nearExpiryPeriod = nearExpiryPeriod;
     }
 
+
+    /**
+     * Coordinates raw material consumption requested by another bounded context.
+     *
+     * @param request the supplier lot, product batch, quantity, unit and operation identifier
+     * @return the consumption result with stock balances
+     * @throws ApplicationException when the consumption operation fails
+     */
     public Consumption consume(ConsumptionRequest request) {
         var result = commands.handle(new ConsumeRawMaterialBatchCommand(request.laboratoryId(), request.rawMaterialBatchId(),
                 request.productBatchId(), request.amountUsed(), request.unit(), request.operationId()));
@@ -54,15 +90,35 @@ public class InventoryContextFacadeImpl implements InventoryContextFacade {
         };
     }
 
+
+    /**
+     * Verifies whether a raw material belongs to a specific laboratory environment.
+     *
+     * @param laboratoryId the laboratory identifier
+     * @param environmentId the environment identifier
+     * @param rawMaterialId the material identifier
+     * @return true when the material belongs to the requested environment
+     */
     public boolean isRawMaterialInEnvironment(Long laboratoryId, Long environmentId, Long rawMaterialId) {
         return queries.handle(new GetEnvironmentRawMaterialByIdQuery(laboratoryId, environmentId, rawMaterialId)).isPresent();
     }
 
-    public Optional<Long> findRawMaterialEnvironment(Long laboratoryId, Long rawMaterialId) {
-        if (laboratoryId == null || rawMaterialId == null) return Optional.empty();
-        return repository.material(laboratoryId, rawMaterialId, false).map(RawMaterial::getEnvironmentId);
-    }
 
+    /**
+     * Retrieves the inventory of a laboratory environment
+     * for consumption by other bounded contexts.
+     *
+     * <p>Materials are ordered by code. Supplier lots
+     * are ordered by reception date.</p>
+     *
+     * <p>Expiration status is calculated using the
+     * configured business clock and near-expiry period.</p>
+     *
+     * @param laboratoryId the laboratory identifier
+     * @param environmentId the environment identifier
+     * @return the inventory materials and their supplier lots,
+     *         or an empty list when required identifiers are null
+     */
     public List<InventoryMaterial> findInventory(Long laboratoryId, Long environmentId) {
         if (laboratoryId == null || environmentId == null) return List.of();
         var today = LocalDate.now(clock);
@@ -80,4 +136,20 @@ public class InventoryContextFacadeImpl implements InventoryContextFacade {
                                 .toList()))
                 .toList();
     }
+
+
+    /**
+     * Finds the environment associated with a raw material.
+     *
+     * <p>The lookup is restricted to the specified laboratory.</p>
+     *
+     * @param laboratoryId the laboratory identifier
+     * @param rawMaterialId the material identifier
+     * @return the environment identifier, if available
+     */
+    public Optional<Long> findRawMaterialEnvironment(Long laboratoryId, Long rawMaterialId) {
+        if (laboratoryId == null || rawMaterialId == null) return Optional.empty();
+        return repository.material(laboratoryId, rawMaterialId, false).map(RawMaterial::getEnvironmentId);
+    }
+
 }

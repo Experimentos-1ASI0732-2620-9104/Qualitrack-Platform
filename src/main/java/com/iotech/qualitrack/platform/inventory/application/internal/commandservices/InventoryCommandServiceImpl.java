@@ -3,7 +3,8 @@ package com.iotech.qualitrack.platform.inventory.application.internal.commandser
 import com.iotech.qualitrack.platform.inventory.application.internal.outboundservices.acl.InventoryExternalEquipmentService;
 import com.iotech.qualitrack.platform.inventory.application.internal.outboundservices.acl.InventoryExternalLaboratoryService;
 import com.iotech.qualitrack.platform.shared.application.security.CurrentUser;
-import com.iotech.qualitrack.platform.inventory.domain.model.valueobjects.RawMaterialBatchReview;import com.iotech.qualitrack.platform.inventory.application.commandservices.InventoryCommandService;
+import com.iotech.qualitrack.platform.inventory.domain.model.valueobjects.RawMaterialBatchReview;
+import com.iotech.qualitrack.platform.inventory.application.commandservices.InventoryCommandService;
 import com.iotech.qualitrack.platform.inventory.application.internal.outboundservices.InventoryMovementRecorder;
 import com.iotech.qualitrack.platform.inventory.domain.model.commands.*;
 import com.iotech.qualitrack.platform.inventory.domain.model.aggregates.*;
@@ -12,7 +13,6 @@ import com.iotech.qualitrack.platform.inventory.interfaces.events.RawMaterialSav
 import com.iotech.qualitrack.platform.inventory.interfaces.events.ReceiptConsumedIntegrationEvent;
 import com.iotech.qualitrack.platform.inventory.domain.model.valueobjects.*;
 import com.iotech.qualitrack.platform.inventory.domain.repositories.InventoryRepository;
-import com.iotech.qualitrack.platform.batch.interfaces.acl.BatchContextFacade;
 import com.iotech.qualitrack.platform.shared.application.result.*;
 import com.iotech.qualitrack.platform.shared.domain.model.valueobjects.StockUnit;
 import org.springframework.context.ApplicationEventPublisher;
@@ -25,14 +25,13 @@ import java.time.*;
 @Transactional
 public class InventoryCommandServiceImpl implements InventoryCommandService {
     private final InventoryRepository repository;
-    private final BatchContextFacade batches;
     private final InventoryMovementRecorder recorder;
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final InventoryExternalLaboratoryService laboratories;
     private final InventoryExternalEquipmentService equipment;
     private final CurrentUser currentUser;
-    public InventoryCommandServiceImpl(InventoryRepository repository, BatchContextFacade batches,
+    public InventoryCommandServiceImpl(InventoryRepository repository,
             InventoryMovementRecorder recorder, ApplicationEventPublisher events, Clock inventoryClock,
             InventoryExternalLaboratoryService laboratories, InventoryExternalEquipmentService equipment,
             CurrentUser currentUser) {
@@ -40,7 +39,6 @@ public class InventoryCommandServiceImpl implements InventoryCommandService {
         this.currentUser = currentUser;
         this.repository = repository;
         this.laboratories = laboratories;
-        this.batches = batches;
         this.recorder = recorder;
         this.events = events;
         this.clock = inventoryClock;
@@ -57,8 +55,8 @@ public class InventoryCommandServiceImpl implements InventoryCommandService {
         var minimumStock = command.minimumStock();
 
         requireEnvironment(lab, environment);
-        requireText(code, 50, "Code");
-        requireText(name, 150, "Name");
+        code = requireText(code, 50, "Code");
+        name = requireText(name, 150, "Name");
         Long legacy = null;
         if (id != null) {
             var previous = materialInEnvironment(lab, environment, id, true);
@@ -86,8 +84,8 @@ public class InventoryCommandServiceImpl implements InventoryCommandService {
 
         requireEnvironment(lab, command.environmentId());
         var material = materialInEnvironment(lab, command.environmentId(), materialId, true);
-        requireText(supplier, 150, "Supplier");
-        requireText(number, 50, "Batch number");
+        supplier = requireText(supplier, 150, "Supplier");
+        number = requireText(number, 50, "Batch number");
         StockUnit.requireSame(material.getUnit(), unit);
         if (received == null || received.isAfter(today())) throw new IllegalArgumentException("Receipt date cannot be in the future");
         if (repository.receiptExists(lab, materialId, supplier.trim(), number.trim())) throw conflict("Supplier receipt already exists");
@@ -103,7 +101,7 @@ public class InventoryCommandServiceImpl implements InventoryCommandService {
         var target = command.status();
         var reason = command.reason();
 
-        requireText(reason, 500, "Review reason");
+        reason = requireText(reason, 500, "Review reason");
         requireEnvironment(lab, command.environmentId());
         materialInEnvironment(lab, command.environmentId(), command.materialId(), false);
         var receipt = receipt(lab, receiptId, true);
@@ -112,12 +110,7 @@ public class InventoryCommandServiceImpl implements InventoryCommandService {
         }
         var previous = receipt.getStatus().name();
         try {
-            if (target == RawMaterialBatchStatus.RELEASED) {
-                if (!today().isBefore(receipt.getExpiresOn())) throw conflict("Expired receipt cannot be released");
-                receipt.release();
-            } else if (target == RawMaterialBatchStatus.OBSERVED) receipt.observe();
-            else if (target == RawMaterialBatchStatus.REJECTED) receipt.reject();
-            else throw new IllegalArgumentException("Choose RELEASED, OBSERVED or REJECTED");
+            applyReviewDecision(receipt, target);
         } catch (IllegalStateException ex) { throw conflict(ex.getMessage()); }
         repository.saveReceipt(receipt);
         var movement = recorder.record(receipt, null, "REVIEW", BigDecimal.ZERO, receipt.getAvailableAmount(), previous, reason.trim(), null);
@@ -139,7 +132,6 @@ public class InventoryCommandServiceImpl implements InventoryCommandService {
                 throw conflict("Operation ID was already used with different values");
             return Result.success(consumption(movement));
         }
-        batches.requireConsumable(request.productBatchId(), request.laboratoryId());
         var before = receipt.getAvailableAmount();
         try { receipt.consume(request.amountUsed(), request.unit(), today()); }
         catch (IllegalStateException ex) { throw conflict(ex.getMessage()); }
@@ -216,9 +208,20 @@ public class InventoryCommandServiceImpl implements InventoryCommandService {
 
     private LocalDate today() { return LocalDate.now(clock); }
 
-    private static void requireText(String text, int max, String field) {
+    private static String requireText(String text, int max, String field) {
         if (text == null || text.isBlank() || text.trim().length() > max)
             throw new IllegalArgumentException(field + " is required (maximum " + max + " characters)");
+
+        return text.trim();
+    }
+
+    private void applyReviewDecision(RawMaterialBatch receipt, RawMaterialBatchStatus target) {
+        if (target == RawMaterialBatchStatus.RELEASED) {
+            if (!today().isBefore(receipt.getExpiresOn())) throw conflict("Expired receipt cannot be released");
+            receipt.release();
+        } else if (target == RawMaterialBatchStatus.OBSERVED) receipt.observe();
+        else if (target == RawMaterialBatchStatus.REJECTED) receipt.reject();
+        else throw new IllegalArgumentException("Choose RELEASED, OBSERVED or REJECTED");
     }
 
     private static ApplicationException conflict(String message) {
