@@ -1,4 +1,4 @@
-package com.iotech.qualitrack.platform;
+package com.iotech.qualitrack.platform.shared.domain.model;
 
 import com.iotech.qualitrack.platform.shared.domain.model.valueobjects.StockUnit;
 import com.iotech.qualitrack.platform.laboratory.domain.model.commands.CreateRawMaterialCommand;
