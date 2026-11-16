@@ -6,7 +6,8 @@ import com.iotech.qualitrack.platform.laboratory.domain.model.valueobjects.Staff
 import org.springframework.stereotype.Service;
 
 /**
- * ACL service used by Laboratory Management to create and disable the accounts of its staff in IAM.
+ * ACL service used by Laboratory Management to associate the laboratory with its owner's account and to create and
+ * disable the accounts of its staff in IAM.
  */
 @Service
 public class ExternalIamService {
@@ -14,6 +15,22 @@ public class ExternalIamService {
 
     public ExternalIamService(IamContextFacade iamContextFacade) {
         this.iamContextFacade = iamContextFacade;
+    }
+
+    /**
+     * Locks the account until the onboarding transaction ends.
+     *
+     * @return true when the account is already associated with a laboratory
+     */
+    public boolean lockLaboratoryAssociation(Long userId) {
+        return iamContextFacade.lockLaboratoryAssociation(userId) != null;
+    }
+
+    /**
+     * Associates the account of the owner with the new laboratory.
+     */
+    public void assignLaboratory(Long userId, Long laboratoryId) {
+        iamContextFacade.assignLaboratory(userId, laboratoryId);
     }
 
     public boolean existsAccount(String email) {
