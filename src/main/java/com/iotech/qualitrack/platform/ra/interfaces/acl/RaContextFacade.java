@@ -1,6 +1,5 @@
 package com.iotech.qualitrack.platform.ra.interfaces.acl;
 
-import com.iotech.qualitrack.platform.ra.domain.model.valueobjects.AuditAction;
 
 /**
  * Inbound Anti-Corruption Layer (ACL) facade for the Reporting and Analysis bounded context.
@@ -13,7 +12,7 @@ public interface RaContextFacade {
     /**
      * Records an audit log entry from another bounded context.
      *
-     * @param action The performed audit action.
+     * @param action The performed audit action, for example CREATE, UPDATE, RELEASE or GENERATE.
      * @param entityType The affected entity type.
      * @param entityId The affected entity identifier, if applicable.
      * @param performedBy The actor identifier.
@@ -21,7 +20,7 @@ public interface RaContextFacade {
      * @return true if the audit log entry was recorded successfully.
      */
     boolean recordAuditLog(
-            AuditAction action,
+            String action,
             String entityType,
             Long entityId,
             Long performedBy,

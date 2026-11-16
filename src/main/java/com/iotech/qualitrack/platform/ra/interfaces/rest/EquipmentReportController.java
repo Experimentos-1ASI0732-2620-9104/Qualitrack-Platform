@@ -22,7 +22,9 @@ import org.springframework.web.bind.annotation.RestController;
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
- * Log reports of an equipment located in an environment of the laboratory (TS86).
+ * REST endpoint to generate the log report of an equipment located in an environment (TS86).
+ * The resource combines three path dimensions (laboratory, environment, equipment) to reinforce
+ * ownership validation: the equipment must actually be located in the environment.
  */
 @RestController
 @RequestMapping(value = "/api/v1/laboratories/{laboratoryId}/environments/{environmentId}/equipments/{equipmentId}",
@@ -37,6 +39,15 @@ public class EquipmentReportController {
         this.currentUser = currentUser;
     }
 
+    /**
+     * Generates the equipment audit report for the given period.
+     * Builds the command, delegates to the command service and responds 201 + Location.
+     * <ul>
+     *   <li>400: invalid period or format.</li>
+     *   <li>403: environment/equipment outside the tenant.</li>
+     *   <li>404: the equipment does not belong to the given environment.</li>
+     * </ul>
+     */
     @PostMapping(value = "/log-reports", consumes = APPLICATION_JSON_VALUE)
     @Operation(summary = "Generate a log report of an equipment",
             description = "Stores the PDF or CSV report of the audit log of the equipment in the period, requested by "

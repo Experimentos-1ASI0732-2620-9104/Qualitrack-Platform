@@ -30,7 +30,14 @@ import java.util.List;
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
- * Compliance reports of a laboratory (TS83) and the reports generated in it.
+ * REST endpoints for laboratory-level reports (TS83 and TS85):
+ * <ul>
+ *   <li>{@code POST /compliance-reports}: environmental report for a period.</li>
+ *   <li>{@code POST /inventory/reports}: inventory report.</li>
+ *   <li>{@code GET /reports}: lists reports generated in the laboratory.</li>
+ * </ul>
+ * All endpoints inherit multi-tenant protection through the global security annotation;
+ * {@code laboratoryId} is part of the path in every case.
  */
 @RestController
 @RequestMapping(value = "/api/v1/laboratories/{laboratoryId}", produces = APPLICATION_JSON_VALUE)
@@ -47,6 +54,14 @@ public class LaboratoryReportController {
         this.currentUser = currentUser;
     }
 
+    /**
+     * Generates the environmental period report. The command service validates:
+     * <ul>
+     *   <li>The period covers full days in America/Lima.</li>
+     *   <li>{@code environmentId} (if sent) belongs to the laboratory.</li>
+     * </ul>
+     * For the default range, see {@link GenerateComplianceReportResource}.
+     */
     @PostMapping(value = "/compliance-reports", consumes = APPLICATION_JSON_VALUE)
     @Operation(summary = "Generate the environmental report of a period",
             description = "Stores the PDF or CSV report requested by the authenticated user for whole calendar days "
@@ -67,6 +82,11 @@ public class LaboratoryReportController {
         return ReportResponseAssembler.toCreatedResponse(raCommandService.handle(command));
     }
 
+    /**
+     * Generates the laboratory inventory report, optionally filtered by {@code environmentId}.
+     * The business date is evaluated in America/Lima so "expiring" and "lowStock" are
+     * consistent with the daily operational cut.
+     */
     @PostMapping(value = "/inventory/reports", consumes = APPLICATION_JSON_VALUE)
     @Operation(summary = "Generate the inventory report",
             description = "Stores the PDF or CSV report requested by the authenticated user with the raw materials, lots and "
@@ -85,6 +105,7 @@ public class LaboratoryReportController {
         return ReportResponseAssembler.toCreatedResponse(raCommandService.handle(command));
     }
 
+    /** Lists reports generated in the laboratory (source for the reports view). */
     @GetMapping("/reports")
     @Operation(summary = "Get the reports generated in the laboratory")
     public ResponseEntity<List<AuditReportResource>> getAuditReportsByLaboratoryId(@PathVariable Long laboratoryId) {

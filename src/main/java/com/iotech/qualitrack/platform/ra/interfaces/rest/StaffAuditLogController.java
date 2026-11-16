@@ -20,7 +20,10 @@ import org.springframework.web.bind.annotation.*;
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
- * Activity of a staff member: the operations registered with their account (US92).
+ * REST endpoint for staff member activity (US92).
+ * Returns audit entries whose operations were registered with the staff account
+ * (maintenance, batches, inventory, etc.), ordered newest first.
+ * Requires QA_MANAGER, ADMIN or AUDITOR role and that the laboratory belongs to the current tenant.
  */
 @RestController
 @RequestMapping(value = "/api/v1/laboratories/{laboratoryId}/staff/{staffId}/audit-logs", produces = APPLICATION_JSON_VALUE)
@@ -32,6 +35,11 @@ public class StaffAuditLogController {
         this.raQueryService = raQueryService;
     }
 
+    /**
+     * Returns staff member activity.
+     * The service validates that the staff belongs to the laboratory; otherwise
+     * it returns 404 via ApplicationError (avoids leaking existence across tenants).
+     */
     @GetMapping
     @Operation(summary = "Get the activity of a staff member",
             description = "Audit entries of the operations the staff member registered (maintenance, batches, inventory and others), newest first.")

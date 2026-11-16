@@ -24,7 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
- * Indicators of a laboratory calculated from persisted records (US93, TS81).
+ * REST endpoint for aggregated laboratory indicators (US93, TS81).
+ * Returns operational counts and statistical summaries (average/min/max) per device
+ * and variable, computed on demand from persisted records.
+ * Key policy: a metric without readings in the period produces NO summary (no fake zeros).
  */
 @RestController
 @RequestMapping(value = "/api/v1/laboratories/{laboratoryId}/kpi-dashboards", produces = APPLICATION_JSON_VALUE)
@@ -36,6 +39,14 @@ public class KpiDashboardController {
         this.raQueryService = raQueryService;
     }
 
+    /**
+     * Gets the laboratory KPI dashboard.
+     * <ul>
+     *   <li>Default period: last 7 days; max 31.</li>
+     *   <li>Optional {@code environmentId} filters to a single environment.</li>
+     *   <li>404 if the requested environment does not belong to the laboratory.</li>
+     * </ul>
+     */
     @GetMapping
     @Operation(summary = "Get the indicators of the laboratory",
             description = "Operational counts and the average, minimum and maximum of the readings of each device and "
