@@ -1,4 +1,4 @@
-package com.iotech.qualitrack.platform;
+package com.iotech.qualitrack.platform.subscription.domain.model;
 
 import com.iotech.qualitrack.platform.subscription.domain.model.aggregates.Subscription;
 import com.iotech.qualitrack.platform.subscription.domain.model.commands.ActivateSubscriptionCommand;
@@ -29,10 +29,34 @@ class SubscriptionAccessTests {
         assertThat(subscription.grantsAccess()).isFalse();
         subscription.synchronizeStatus(SubscriptionStatus.ACTIVE);
         assertThat(subscription.grantsAccess()).isTrue();
-        subscription.cancelRenewal(27L, OffsetDateTime.now().toString());
-        assertThat(subscription.grantsAccess()).isTrue();
         subscription.synchronizeStatus(SubscriptionStatus.CANCELLED);
         assertThat(subscription.grantsAccess()).isFalse();
+    }
+    @Test void cancellingTheRenewalKeepsAccessUntilThePeriodEnds() {
+        var subscription = subscription(OffsetDateTime.now().plusDays(10).toString());
+        subscription.cancelRenewal(27L, OffsetDateTime.now().toString());
+        assertThat(subscription.isCancelAtPeriodEnd()).isTrue();
+        assertThat(subscription.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
+        assertThat(subscription.grantsAccess()).isTrue();
+        assertThatThrownBy(() -> subscription.cancelRenewal(27L, OffsetDateTime.now().toString()))
+                .isInstanceOf(IllegalStateException.class);
+        subscription.synchronizeStatus(SubscriptionStatus.CANCELLED);
+        assertThat(subscription.grantsAccess()).isFalse();
+        assertThatThrownBy(() -> subscription.cancelRenewal(27L, OffsetDateTime.now().toString()))
+                .isInstanceOf(IllegalStateException.class);
+    }
+    @Test void aRenewalResumedAtTheProviderClearsTheCancellation() {
+        var subscription = subscription(OffsetDateTime.now().plusDays(10).toString());
+        subscription.cancelRenewal(27L, "2026-10-04T10:00:00Z");
+        subscription.synchronizeRenewal(true, "2026-10-04T11:00:00Z");
+        assertThat(subscription.getCancelledAt()).isEqualTo("2026-10-04T10:00:00Z");
+        subscription.synchronizeRenewal(false, "2026-10-04T12:00:00Z");
+        assertThat(subscription.isCancelAtPeriodEnd()).isFalse();
+        assertThat(subscription.getCancelledAt()).isNull();
+        assertThat(subscription.getCancelledBy()).isNull();
+        subscription.synchronizeRenewal(true, "2026-10-04T13:00:00Z");
+        assertThat(subscription.isCancelAtPeriodEnd()).isTrue();
+        assertThat(subscription.getCancelledAt()).isEqualTo("2026-10-04T13:00:00Z");
     }
     @Test void laboratoryAssociationCannotBeReassigned() {
         var subscription = subscription(OffsetDateTime.now().plusDays(1).toString());

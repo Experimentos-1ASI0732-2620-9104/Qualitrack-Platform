@@ -57,7 +57,7 @@ public class SubscriptionPayment {
      */
     public static SubscriptionPayment stripePayment(
             Long subscriptionId,
-            String stripePaymentIntentId,
+            String providerPaymentId,
             String stripeCheckoutSessionId,
             Money amount,
             PaymentStatus status,
@@ -67,7 +67,7 @@ public class SubscriptionPayment {
                 null,
                 subscriptionId,
                 PaymentProvider.STRIPE,
-                stripePaymentIntentId,
+                providerPaymentId,
                 stripeCheckoutSessionId,
                 amount,
                 status,
