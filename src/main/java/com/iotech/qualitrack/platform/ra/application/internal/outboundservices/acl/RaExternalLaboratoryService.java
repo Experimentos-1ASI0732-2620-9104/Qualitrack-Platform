@@ -1,6 +1,7 @@
 package com.iotech.qualitrack.platform.ra.application.internal.outboundservices.acl;
 
 import com.iotech.qualitrack.platform.laboratory.interfaces.acl.LaboratoryContextFacade;
+import com.iotech.qualitrack.platform.ra.domain.model.valueobjects.ReportEnvironment;
 import org.springframework.stereotype.Service;
 
 /**
@@ -34,27 +35,46 @@ public class RaExternalLaboratoryService {
     }
 
     /**
-     * Resolves the account of a staff member of the laboratory.
+     * Name of the laboratory, shown in the header of its reports.
      *
-     * @return the user id of the staff member (empty optional inside when it has no account), or empty when the
-     * staff member is not registered in the laboratory
+     * @throws java.util.NoSuchElementException when the laboratory does not exist
      */
+    public String laboratoryName(Long laboratoryId) {
+        return laboratoryContextFacade.findLaboratoryName(laboratoryId).orElseThrow();
+    }
+
     /**
      * Environments of the laboratory, ordered by code.
      */
-    public java.util.List<LaboratoryContextFacade.EnvironmentReference> findEnvironments(Long laboratoryId) {
-        return laboratoryContextFacade.findEnvironments(laboratoryId);
+    public java.util.List<ReportEnvironment> findEnvironments(Long laboratoryId) {
+        return laboratoryContextFacade.findEnvironments(laboratoryId).stream()
+                .map(RaExternalLaboratoryService::toReportEnvironment).toList();
     }
 
     /**
      * An environment of the laboratory, or empty when it does not belong to it.
      */
-    public java.util.Optional<LaboratoryContextFacade.EnvironmentReference> findEnvironment(Long laboratoryId, Long environmentId) {
-        return laboratoryContextFacade.findEnvironment(laboratoryId, environmentId);
+    public java.util.Optional<ReportEnvironment> findEnvironment(Long laboratoryId, Long environmentId) {
+        return laboratoryContextFacade.findEnvironment(laboratoryId, environmentId)
+                .map(RaExternalLaboratoryService::toReportEnvironment);
     }
 
+    /**
+     * Resolves the account of a staff member of the laboratory.
+     *
+     * @return the user id of the staff member (empty optional inside when it has no account), or empty when the
+     * staff member is not registered in the laboratory
+     */
     public java.util.Optional<java.util.Optional<Long>> findStaffAccount(Long laboratoryId, Long staffId) {
         return laboratoryContextFacade.findStaffMember(laboratoryId, staffId)
                 .map(staff -> java.util.Optional.ofNullable(staff.userId()));
+    }
+
+    /**
+     * Maps a Laboratory ACL environment reference to RA's {@link ReportEnvironment}
+     * value object, keeping the ACL boundary explicit.
+     */
+    private static ReportEnvironment toReportEnvironment(LaboratoryContextFacade.EnvironmentReference environment) {
+        return new ReportEnvironment(environment.id(), environment.code(), environment.name());
     }
 }

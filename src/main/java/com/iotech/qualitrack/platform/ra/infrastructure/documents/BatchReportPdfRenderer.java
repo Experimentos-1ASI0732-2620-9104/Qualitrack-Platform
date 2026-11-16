@@ -8,10 +8,23 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Renders the snapshot of one batch without inferring unavailable operational data. */
+/**
+ * Renderer for the batch traceability report.
+ * Receives a {@link BatchReportData} already resolved by the use case and only handles
+ * document layout. It never queries repositories nor infers data absent from the snapshot
+ * (missing fields are shown as "Not recorded").
+ */
 final class BatchReportPdfRenderer extends AbstractReportPdfRenderer {
+
+    /** Immutable snapshot of the batch and its linked records, set by {@link #render}. */
     private BatchReportData data;
 
+    /**
+     * Renderer entry point. Stores the snapshot and delegates to {@code renderDocument}
+     * for PDF creation, pagination and footers.
+     * Sections follow a narrative order: summary -> batch -> material traceability
+     * -> equipment/staff -> storage/decision -> deviations -> notes/scope.
+     */
     byte[] render(BatchReportData snapshot) {
         data = snapshot;
         return renderDocument("Batch traceability report", data.batchNumber(), () -> {
@@ -97,6 +110,12 @@ final class BatchReportPdfRenderer extends AbstractReportPdfRenderer {
         });
     }
 
+    /**
+     * Summary block with the four key batch metrics (status, quantity, usage records
+     * and deviations). Values are shrunk iteratively (13 -> 9) to fit a single line
+     * before wrapping, preserving readability.
+     * Status color is resolved via {@link #statusColor}.
+     */
     private void summary() throws IOException {
         String[] labels = {"BATCH STATUS", "QUANTITY", "USAGE RECORDS", "DEVIATIONS"};
         String[] values = {human(data.status()), number(data.quantity()) + " " + value(data.unit()),
@@ -123,6 +142,11 @@ final class BatchReportPdfRenderer extends AbstractReportPdfRenderer {
         y += height + 9;
     }
 
+    /**
+     * Horizontal timeline showing batch start and end, with markers (dots) and a central
+     * legend with the duration. If dates are unparseable or end precedes start,
+     * shows "Processing window" without inventing a duration.
+     */
     private void timeline() throws IOException {
         ensure(58);
         y += 12;
@@ -142,6 +166,11 @@ final class BatchReportPdfRenderer extends AbstractReportPdfRenderer {
         y += 39;
     }
 
+    /**
+     * Side-by-side bar charts of deviations by status and by severity.
+     * Bars are scaled against the total deviations of the batch; a note below clarifies
+     * that counts come from N linked records.
+     */
     private void charts() throws IOException {
         ensure(108);
         long total = data.deviations().size();

@@ -4,13 +4,17 @@ import com.iotech.qualitrack.platform.ra.domain.model.entities.AuditLogEntry;
 import com.iotech.qualitrack.platform.ra.infrastructure.persistence.jpa.entities.AuditLogEntryPersistenceEntity;
 
 /**
- * Static assembler between audit log entry domain and persistence representations.
+ * Static assembler between {@link AuditLogEntry} (domain) and
+ * {@link AuditLogEntryPersistenceEntity} (persistence).
+ * As a stateless utility class it is not instantiable (private constructor).
+ * Maps field by field, with no extra logic, to keep the repository adapter clean.
  */
 public final class AuditLogEntryPersistenceAssembler {
 
     private AuditLogEntryPersistenceAssembler() {
     }
 
+    /** Converts a JPA entity to domain. Returns {@code null} when the input is null. */
     public static AuditLogEntry toDomainFromPersistence(AuditLogEntryPersistenceEntity entity) {
         if (entity == null) return null;
 
@@ -25,6 +29,11 @@ public final class AuditLogEntryPersistenceAssembler {
         );
     }
 
+    /**
+     * Converts a domain entry to a JPA entity.
+     * Only sets the id when it already exists (updates); on inserts it is left null
+     * so JPA can generate it.
+     */
     public static AuditLogEntryPersistenceEntity toPersistenceFromDomain(AuditLogEntry auditLogEntry) {
         if (auditLogEntry == null) return null;
 

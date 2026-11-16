@@ -19,7 +19,13 @@ import org.springframework.web.bind.annotation.*;
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
- * REST controller that exposes audit report resources.
+ * REST endpoints for querying and downloading reports.
+ * <ul>
+ *   <li>{@code GET /{reportId}/content}: downloads the original binary (PDF/CSV).</li>
+ *   <li>{@code GET /{reportId}}: returns report metadata.</li>
+ * </ul>
+ * The {@code reportId} is registered in {@code RaTenantResourceLookup}, so all calls
+ * inherit the tenancy filter automatically.
  */
 @RestController
 @RequestMapping(value = "/api/v1/reports", produces = APPLICATION_JSON_VALUE)
@@ -33,6 +39,16 @@ public class ReportController {
         this.documents = documents;
     }
 
+    /**
+     * Downloads the report binary content.
+     * <ul>
+     *   <li>Serves the correct MIME type ({@code application/pdf} or {@code text/csv;charset=UTF-8}).</li>
+     *   <li>Adds {@code Content-Disposition: attachment} with a stable "report-{id}.{ext}" name.</li>
+     *   <li>Sends {@code Cache-Control: private, no-store} to avoid intermediary caches
+     *       retaining sensitive content.</li>
+     *   <li>404 if the report does not exist or is legacy without stored binary.</li>
+     * </ul>
+     */
     @GetMapping(value = "/{reportId}/content", produces = {"application/pdf", "text/csv"})
     @Operation(summary = "Download a stored report", description = "Returns the original PDF or CSV after checksum verification. "
             + "Requires access to the report laboratory. Returns 404 for legacy metadata without stored content.")
@@ -49,6 +65,7 @@ public class ReportController {
                 .body(value.content());
     }
 
+    /** Returns report metadata (AuditReportResource) or 404 if not found. */
     @GetMapping(value = "/{reportId}")
     @Operation(summary = "Get audit report by ID")
     public ResponseEntity<?> getAuditReportById(@PathVariable Long reportId) {

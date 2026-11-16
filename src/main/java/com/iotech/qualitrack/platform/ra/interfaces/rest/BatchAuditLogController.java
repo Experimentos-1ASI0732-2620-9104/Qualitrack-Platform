@@ -18,6 +18,10 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 /**
  * Audit log of a production batch (TS80). Entries are recorded by the platform when the batch changes.
+ *
+ * <p>The {@code batchId} in the path is used by {@link GetAuditLogQuery} to filter entries by
+ * {@code ENTITY_TYPE = BATCH}. Tenancy is enforced by the security layer, so no explicit
+ * {@code laboratoryId} parameter is needed here.
  */
 @RestController
 @RequestMapping(value = "/api/v1/batches/{batchId}/audit-logs", produces = APPLICATION_JSON_VALUE)
@@ -29,6 +33,12 @@ public class BatchAuditLogController {
         this.raQueryService = raQueryService;
     }
 
+    /**
+     * Returns the audit entries of the batch, optionally constrained to a period.
+     * {@code dateFrom}/{@code dateTo} are ISO-8601 and inclusive; when omitted, the full
+     * batch history is returned. The response is empty (not 404) when the batch has no
+     * recorded activity in the period.
+     */
     @GetMapping
     @Operation(summary = "Get the audit log of a batch", description = "Optional period: dateFrom and dateTo.")
     public ResponseEntity<List<AuditLogEntryResource>> getBatchAuditLogs(@PathVariable Long batchId,
