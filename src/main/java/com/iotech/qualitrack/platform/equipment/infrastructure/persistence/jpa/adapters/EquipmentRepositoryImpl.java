@@ -47,6 +47,13 @@ public class EquipmentRepositoryImpl implements EquipmentRepository {
     }
 
     @Override
+    public List<Equipment> findAllByLabIdAndEnvironmentId(Long labId, Long environmentId) {
+        return repository.findAllByLabIdAndEnvironmentId(labId, environmentId).stream()
+                .map(EquipmentPersistenceAssembler::toDomainFromPersistence)
+                .toList();
+    }
+
+    @Override
     public Optional<Equipment> findBySensorExternalId(DeviceId sensorExternalId) {
         // Extraemos el valor String del Value Object para la consulta JPA
         return repository.findBySensorExternalId(sensorExternalId.value())

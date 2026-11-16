@@ -9,6 +9,7 @@ import com.iotech.qualitrack.platform.equipment.domain.model.commands.RegisterIo
 import com.iotech.qualitrack.platform.equipment.domain.model.entities.EquipmentStatusChange;
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
 import com.iotech.qualitrack.platform.shared.application.result.Result;
+import com.iotech.qualitrack.platform.equipment.domain.model.commands.RegisterEdgeGatewayCommand;
 
 /**
  * Application service contract for the commands of the Equipment aggregate.
@@ -30,6 +31,21 @@ public interface EquipmentCommandService {
      * @see RegisterIotDeviceCommand
      */
     Result<Equipment, ApplicationError> handle(RegisterIotDeviceCommand command);
+
+    /**
+     * Registers an Edge Gateway in a laboratory.
+     *
+     * <p>The Gateway receives a unique external identity,
+     * while authentication credentials are managed
+     * separately by IAM.</p>
+     *
+     * @param command Edge Gateway registration command
+     * @return the registered Gateway, or an application error
+     *         when the laboratory is missing or an identifier
+     *         is already registered
+     * @see RegisterEdgeGatewayCommand
+     */
+    Result<Equipment, ApplicationError> handle(RegisterEdgeGatewayCommand command);
 
     /**
      * Locates an equipment or IoT device in an environment of its laboratory (US47, US52, US54).

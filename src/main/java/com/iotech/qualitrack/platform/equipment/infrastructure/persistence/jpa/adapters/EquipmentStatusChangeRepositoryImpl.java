@@ -6,14 +6,30 @@ import com.iotech.qualitrack.platform.equipment.infrastructure.persistence.jpa.e
 import com.iotech.qualitrack.platform.equipment.infrastructure.persistence.jpa.repositories.EquipmentStatusChangePersistenceRepository;
 import org.springframework.stereotype.Repository;
 
+/**
+ * JPA adapter implementation for the {@link EquipmentStatusChangeRepository} port.
+ *
+ * <p>Stores each status change of an equipment so its history stays traceable.</p>
+ */
 @Repository
 public class EquipmentStatusChangeRepositoryImpl implements EquipmentStatusChangeRepository {
     private final EquipmentStatusChangePersistenceRepository repository;
 
+    /**
+     * Creates the adapter with the Spring Data repository of the status changes.
+     *
+     * @param repository Spring Data repository of the status changes
+     */
     public EquipmentStatusChangeRepositoryImpl(EquipmentStatusChangePersistenceRepository repository) {
         this.repository = repository;
     }
 
+    /**
+     * Saves a status change and returns it with its generated id.
+     *
+     * @param statusChange status change to store
+     * @return the stored status change
+     */
     @Override
     public EquipmentStatusChange save(EquipmentStatusChange statusChange) {
         var entity = new EquipmentStatusChangePersistenceEntity();
