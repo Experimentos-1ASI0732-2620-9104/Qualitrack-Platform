@@ -4,7 +4,7 @@ import com.iotech.qualitrack.platform.iam.application.commandservices.UserComman
 import com.iotech.qualitrack.platform.iam.application.queryservices.UserQueryService;
 import com.iotech.qualitrack.platform.iam.domain.model.commands.UpdateAccountCommand;
 import com.iotech.qualitrack.platform.iam.domain.model.queries.GetUserByIdQuery;
-import com.iotech.qualitrack.platform.iam.infrastructure.authorization.sfs.model.UserDetailsImpl;
+import com.iotech.qualitrack.platform.shared.application.security.CurrentUser;
 import com.iotech.qualitrack.platform.iam.interfaces.rest.resources.AuthenticatedUserResource;
 import com.iotech.qualitrack.platform.iam.interfaces.rest.resources.UpdateAccountResource;
 import com.iotech.qualitrack.platform.iam.interfaces.rest.resources.UserResource;
@@ -22,7 +22,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,10 +39,13 @@ public class UserAccountController {
 
     private final UserQueryService userQueryService;
     private final UserCommandService userCommandService;
+    private final CurrentUser currentUser;
 
-    public UserAccountController(UserQueryService userQueryService, UserCommandService userCommandService) {
+    public UserAccountController(UserQueryService userQueryService, UserCommandService userCommandService,
+                                 CurrentUser currentUser) {
         this.userQueryService = userQueryService;
         this.userCommandService = userCommandService;
+        this.currentUser = currentUser;
     }
 
     @GetMapping
@@ -53,11 +55,12 @@ public class UserAccountController {
                     content = @Content(schema = @Schema(implementation = UserResource.class))),
             @ApiResponse(responseCode = "401", description = "Authentication required")
     })
-    public ResponseEntity<?> getAccount(@AuthenticationPrincipal UserDetailsImpl user) {
-        return userQueryService.handle(new GetUserByIdQuery(user.getId()))
+    public ResponseEntity<?> getAccount() {
+        var userId = currentUser.userId();
+        return userQueryService.handle(new GetUserByIdQuery(userId))
                 .<ResponseEntity<?>>map(account -> ResponseEntity.ok(UserResourceFromEntityAssembler.toResourceFromEntity(account)))
                 .orElseGet(() -> ErrorResponseAssembler.toErrorResponseFromApplicationError(
-                        ApplicationError.notFound("User", user.getId())));
+                        ApplicationError.notFound("User", userId)));
     }
 
     @PutMapping(consumes = APPLICATION_JSON_VALUE)
@@ -74,9 +77,8 @@ public class UserAccountController {
             @ApiResponse(responseCode = "409", description = "Username or e-mail used by another account",
                     content = @Content(schema = @Schema(implementation = ErrorResource.class)))
     })
-    public ResponseEntity<?> updateAccount(@AuthenticationPrincipal UserDetailsImpl user,
-                                           @Valid @RequestBody UpdateAccountResource resource) {
-        var command = UpdateAccountCommand.of(user.getId(), resource.username(), resource.email(), resource.currentPassword());
+    public ResponseEntity<?> updateAccount(@Valid @RequestBody UpdateAccountResource resource) {
+        var command = UpdateAccountCommand.of(currentUser.userId(), resource.username(), resource.email(), resource.currentPassword());
         return ResponseEntityAssembler.toResponseEntityFromResult(userCommandService.handle(command),
                 AuthenticatedUserResourceFromEntityAssembler::toResourceFromEntity, HttpStatus.OK);
     }
