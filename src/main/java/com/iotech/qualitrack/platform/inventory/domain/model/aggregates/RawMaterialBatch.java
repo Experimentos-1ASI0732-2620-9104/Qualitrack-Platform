@@ -12,7 +12,24 @@ import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
 
-/** A supplier receipt, not a manufactured product batch. */
+/**
+ * Represents a supplier lot of raw material received
+ * by a laboratory.
+ *
+ * <p>Each lot maintains its supplier, identification number,
+ * initial quantity, available quantity, reception date,
+ * expiration date and quality status.</p>
+ *
+ * <p>Newly received lots begin in the QUARANTINED state.
+ * Quality review operations determine whether a lot can
+ * be released, observed or rejected.</p>
+ *
+ * <p>Only released lots with available stock and a valid
+ * expiration period can be consumed.</p>
+ *
+ * <p>A supplier lot is distinct from a manufactured
+ * product batch.</p>
+ */
 @Getter
 public class RawMaterialBatch extends AbstractDomainAggregateRoot<RawMaterialBatch> {
     private final Long id;
@@ -68,24 +85,71 @@ public class RawMaterialBatch extends AbstractDomainAggregateRoot<RawMaterialBat
         this.containerAssignment = containerAssignment;
     }
 
-    /** A newly received lot requires review before consumption. */
-    public static RawMaterialBatch receive(Long laboratoryId, Long rawMaterialId, String supplier,
-                                            String batchNumber, String unit, BigDecimal amount,
-                                            LocalDate receivedOn, LocalDate expiresOn) {
-        return new RawMaterialBatch(null, laboratoryId, rawMaterialId, supplier, batchNumber,
-                unit, amount, amount, receivedOn, expiresOn, RawMaterialBatchStatus.QUARANTINED);
+
+    /**
+     * Creates a new supplier lot awaiting quality review.
+     *
+     * <p>The received quantity becomes both the initial
+     * and available quantity. The lot starts in the
+     * QUARANTINED state.</p>
+     *
+     * @param laboratoryId the laboratory identifier
+     * @param rawMaterialId the associated material identifier
+     * @param supplier the supplier name
+     * @param batchNumber the supplier lot number
+     * @param unit the measurement unit
+     * @param amount the received quantity
+     * @param receivedOn the reception date
+     * @param expiresOn the expiration date
+     * @return a new quarantined supplier lot
+     */
+    public static RawMaterialBatch receive(
+            Long laboratoryId, Long rawMaterialId, String supplier,
+            String batchNumber, String unit, BigDecimal amount,
+            LocalDate receivedOn, LocalDate expiresOn) {
+
+        return new RawMaterialBatch(
+                null, laboratoryId, rawMaterialId, supplier, batchNumber,
+                unit, amount, amount, receivedOn, expiresOn,
+                RawMaterialBatchStatus.QUARANTINED);
     }
 
-    /** Date-only policy: expiration day is excluded; caller supplies the laboratory's business date. */
+
+    /**
+     * Determines whether a supplier lot can be consumed
+     * on a specified date.
+     *
+     * <p>A lot is usable when it is released, contains
+     * available stock and the reference date is within
+     * its validity period.</p>
+     *
+     * <p>The expiration date itself is excluded
+     * from the usable period.</p>
+     *
+     * @param onDate the reference business date
+     * @return true when the lot is available for consumption
+     */
     public boolean isUsableOn(LocalDate onDate) {
         Objects.requireNonNull(onDate, "Reference date is required");
         return status == RawMaterialBatchStatus.RELEASED && availableAmount.signum() > 0
                 && !onDate.isBefore(receivedOn) && onDate.isBefore(expiresOn);
     }
 
+
     /**
-     * Classifies the expiration of the lot on a business date.
-     * A lot is near expiry when it expires within the next {@code nearExpiryDays} days and is not yet expired.
+     * Determines the expiration status of a supplier lot.
+     *
+     * <p>Returns EXPIRED when the reference date reaches
+     * or exceeds the expiration date.</p>
+     *
+     * <p>Returns NEAR_EXPIRY when the lot expires within
+     * the specified monitoring period. Otherwise,
+     * the lot is considered VALID.</p>
+     *
+     * @param onDate the reference business date
+     * @param nearExpiryDays the number of days used to identify upcoming expiration
+     * @return the expiration status of the supplier lot
+     * @throws IllegalArgumentException when nearExpiryDays is negative
      */
     public ExpirationStatus expirationStatus(LocalDate onDate, int nearExpiryDays) {
         Objects.requireNonNull(onDate, "Reference date is required");
@@ -94,6 +158,15 @@ public class RawMaterialBatch extends AbstractDomainAggregateRoot<RawMaterialBat
         return expiresOn.isAfter(onDate.plusDays(nearExpiryDays)) ? ExpirationStatus.VALID : ExpirationStatus.NEAR_EXPIRY;
     }
 
+
+    /**
+     * Releases a supplier lot after quality review.
+     *
+     * <p>Only lots currently in the QUARANTINED state
+     * may transition to RELEASED.</p>
+     *
+     * @throws IllegalStateException when the lot is not quarantined
+     */
     public void release() {
         if (status != RawMaterialBatchStatus.QUARANTINED) {
             throw new IllegalStateException("Only quarantined receipts can be released after review");
@@ -101,6 +174,15 @@ public class RawMaterialBatch extends AbstractDomainAggregateRoot<RawMaterialBat
         status = RawMaterialBatchStatus.RELEASED;
     }
 
+
+    /**
+     * Marks a released supplier lot as observed.
+     *
+     * <p>Only lots in the RELEASED state may transition
+     * to OBSERVED.</p>
+     *
+     * @throws IllegalStateException when the lot is not released
+     */
     public void observe() {
         if (status != RawMaterialBatchStatus.RELEASED) {
             throw new IllegalStateException("Only released receipts can be marked observed");
@@ -108,6 +190,15 @@ public class RawMaterialBatch extends AbstractDomainAggregateRoot<RawMaterialBat
         status = RawMaterialBatchStatus.OBSERVED;
     }
 
+
+    /**
+     * Rejects a supplier lot during quality review.
+     *
+     * <p>A lot cannot be rejected again when it is
+     * already in the REJECTED state.</p>
+     *
+     * @throws IllegalStateException when the lot is already rejected
+     */
     public void reject() {
         if (status == RawMaterialBatchStatus.REJECTED) {
             throw new IllegalStateException("Receipt is already rejected");
@@ -116,28 +207,57 @@ public class RawMaterialBatch extends AbstractDomainAggregateRoot<RawMaterialBat
     }
 
     /**
-     * Stores the lot in a monitored container, replacing the previous one (US43).
+     * Consumes a quantity from the available stock
+     * of a supplier lot.
      *
-     * @param assignment the container, its environment and who stored the lot
-     * @return false when the lot was already stored in that container
+     * <p>The requested unit must match the lot unit.
+     * The quantity must be valid and must not exceed
+     * the available stock.</p>
+     *
+     * <p>Consumption is permitted only when the lot
+     * is usable on the reference date.</p>
+     *
+     * @param amount the quantity to consume
+     * @param requestedUnit the requested measurement unit
+     * @param onDate the reference business date
+     * @throws IllegalArgumentException when the quantity or unit is invalid
+     * @throws IllegalStateException when the lot cannot be consumed or lacks stock
      */
-    public boolean storeIn(ContainerAssignment assignment) {
-        Objects.requireNonNull(assignment, "Container assignment is required");
-        if (containerAssignment != null && containerAssignment.isIn(assignment.containerMonitorId())) return false;
-        containerAssignment = assignment;
-        return true;
-    }
-
-    /** @return the container where the lot is stored, if any (US44) */
-    public Optional<ContainerAssignment> container() {
-        return Optional.ofNullable(containerAssignment);
-    }
-
     public void consume(BigDecimal amount, String requestedUnit, LocalDate onDate) {
         StockUnit.requireSame(unit, requestedUnit);
         StockUnit.validateQuantity(amount, unit, false);
         if (!isUsableOn(onDate)) throw new IllegalStateException("Receipt is not available for consumption");
         if (amount.compareTo(availableAmount) > 0) throw new IllegalStateException("Insufficient stock in receipt");
         availableAmount = availableAmount.subtract(amount);
+    }
+
+    /**
+     * Retrieves the current container assignment of the lot.
+     *
+     * @return the container assignment, or an empty result
+     *         when no container has been assigned
+     */
+    public Optional<ContainerAssignment> container() {
+        return Optional.ofNullable(containerAssignment);
+    }
+
+    /**
+     * Assigns the supplier lot to a monitored storage container.
+     *
+     * <p>An existing container assignment is replaced
+     * when a different container is selected.</p>
+     *
+     * <p>Assigning the same container again does not
+     * modify the current assignment.</p>
+     *
+     * @param assignment the monitored container assignment
+     * @return true when the assignment changes,
+     *         false when the lot is already in that container
+     */
+    public boolean storeIn(ContainerAssignment assignment) {
+        Objects.requireNonNull(assignment, "Container assignment is required");
+        if (containerAssignment != null && containerAssignment.isIn(assignment.containerMonitorId())) return false;
+        containerAssignment = assignment;
+        return true;
     }
 }

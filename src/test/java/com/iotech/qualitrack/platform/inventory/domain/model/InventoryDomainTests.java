@@ -1,8 +1,11 @@
-package com.iotech.qualitrack.platform;
+package com.iotech.qualitrack.platform.inventory.domain.model;
 
 import com.iotech.qualitrack.platform.inventory.domain.model.aggregates.RawMaterial;
 import com.iotech.qualitrack.platform.inventory.domain.model.aggregates.RawMaterialBatch;
+import com.iotech.qualitrack.platform.inventory.domain.model.valueobjects.ExpirationStatus;
+import com.iotech.qualitrack.platform.inventory.domain.model.valueobjects.MaterialStockSummary;
 import com.iotech.qualitrack.platform.inventory.domain.model.valueobjects.RawMaterialBatchStatus;
+import com.iotech.qualitrack.platform.inventory.domain.model.valueobjects.StockStatus;
 import com.iotech.qualitrack.platform.inventory.interfaces.acl.InventoryContextFacade.ConsumptionRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -150,8 +153,35 @@ class InventoryDomainTests {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void expirationStatusSeparatesValidNearExpiryAndExpiredLots() {
+        var lot = receipt(1L, 1L, 10L, "kg", "10", EXPIRY, RawMaterialBatchStatus.RELEASED);
+        assertThat(lot.expirationStatus(EXPIRY.minusDays(31), 30)).isEqualTo(ExpirationStatus.VALID);
+        assertThat(lot.expirationStatus(EXPIRY.minusDays(30), 30)).isEqualTo(ExpirationStatus.NEAR_EXPIRY);
+        assertThat(lot.expirationStatus(EXPIRY.minusDays(1), 0)).isEqualTo(ExpirationStatus.VALID);
+        assertThat(lot.expirationStatus(EXPIRY, 30)).isEqualTo(ExpirationStatus.EXPIRED);
+        assertThatThrownBy(() -> lot.expirationStatus(TODAY, -1)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void stockIsLowOnlyBelowTheMinimum() {
+        var below = new MaterialStockSummary(1L, 1L, 5L, "RM", "M", "kg", BigDecimal.TEN, new BigDecimal("9.999"), BigDecimal.TEN, null);
+        var equal = new MaterialStockSummary(1L, 1L, 5L, "RM", "M", "kg", BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, null);
+        assertThat(below.stockStatus()).isEqualTo(StockStatus.LOW);
+        assertThat(equal.stockStatus()).isEqualTo(StockStatus.SUFFICIENT);
+    }
+
+    @Test
+    void materialBelongsOnlyToItsEnvironment() {
+        assertThat(material().belongsToEnvironment(5L)).isTrue();
+        assertThat(material().belongsToEnvironment(6L)).isFalse();
+        assertThat(new RawMaterial(11L, 1L, null, "RM-11", "Legacy", "kg", BigDecimal.ONE).belongsToEnvironment(5L)).isFalse();
+        assertThatThrownBy(() -> new RawMaterial(12L, 1L, 0L, "RM-12", "Invalid", "kg", BigDecimal.ONE))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     private RawMaterial material() {
-        return new RawMaterial(10L, 1L, 1L, "RM-10", "Material", "kg", BigDecimal.TEN);
+        return new RawMaterial(10L, 1L, 5L, "RM-10", "Material", "kg", BigDecimal.TEN);
     }
 
     private RawMaterialBatch receipt(Long id, Long laboratoryId, Long materialId, String unit,

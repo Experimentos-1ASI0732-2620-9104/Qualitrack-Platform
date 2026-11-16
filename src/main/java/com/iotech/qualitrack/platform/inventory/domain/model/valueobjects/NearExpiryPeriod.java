@@ -1,7 +1,14 @@
 package com.iotech.qualitrack.platform.inventory.domain.model.valueobjects;
 
+
 /**
- * Number of days before expiration in which a lot is considered near expiry (US42).
+ * Defines the number of days used to classify supplier
+ * batches as approaching expiration.
+ *
+ * <p>The supported range is from 0 to 3650 days.</p>
+ *
+ * @param days number of days before expiration
+ * @throws IllegalArgumentException when days is outside the supported range
  */
 public record NearExpiryPeriod(int days) {
     public NearExpiryPeriod {
