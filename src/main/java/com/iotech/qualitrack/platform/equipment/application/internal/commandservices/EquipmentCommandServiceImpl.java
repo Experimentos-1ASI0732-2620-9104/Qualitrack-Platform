@@ -20,6 +20,7 @@ import com.iotech.qualitrack.platform.equipment.domain.repositories.EquipmentSta
 import com.iotech.qualitrack.platform.shared.application.result.ApplicationError;
 import com.iotech.qualitrack.platform.shared.application.result.Result;
 import com.iotech.qualitrack.platform.shared.application.security.CurrentUser;
+import com.iotech.qualitrack.platform.equipment.domain.model.commands.RegisterEdgeGatewayCommand;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -88,6 +89,38 @@ public class EquipmentCommandServiceImpl implements EquipmentCommandService {
         var device = equipmentRepository.save(new Equipment(command));
         eventPublisher.publishEvent(EquipmentRegisteredEvent.from(device));
         return Result.success(device);
+    }
+
+    /**
+     * Registers a new Edge Gateway using its external identity.
+     *
+     * <p>Verifies laboratory ownership and prevents duplicated
+     * external identifiers and serial numbers.</p>
+     *
+     * <p>Uses the dedicated Edge Gateway constructor without
+     * modifying existing equipment or IoT registration flows.</p>
+     *
+     * @param command Gateway registration command
+     * @return the registered Gateway or an application error
+     */
+    @Override
+    @Transactional
+    public Result<Equipment, ApplicationError> handle(RegisterEdgeGatewayCommand command) {
+
+        if (!externalLabService.existsLaboratoryById(command.laboratoryId())) {
+            return Result.failure(ApplicationError.notFound("Laboratory", command.laboratoryId()));
+        }
+        if (equipmentRepository.existsBySensorExternalId(new DeviceId(command.sensorExternalId()))) {
+            return Result.failure(
+                    ApplicationError.conflict("EdgeGateway", "Gateway with external identifier '%s' already exists".formatted(command.sensorExternalId()))
+            );
+        }
+        if (equipmentRepository.existsBySerialNumber(command.serialNumber())) {
+            return Result.failure(serialNumberConflict(command.serialNumber()));
+        }
+        var gateway = equipmentRepository.save(new Equipment(command));
+        eventPublisher.publishEvent(EquipmentRegisteredEvent.from(gateway));
+        return Result.success(gateway);
     }
 
     @Override
