@@ -14,20 +14,16 @@ package "shared" <<External>> {
   class Result
 }
 
-package "ca.interfaces.acl" <<External>> {
-  interface ComplianceContextFacade
-}
-
 package "iam.interfaces.acl" <<External>> {
   class IamContextFacade
 }
 
-package "iam.interfaces.events" <<External>> {
-  class UserAccountUpdatedIntegrationEvent <<record>>
+package "subscription.interfaces.acl" <<External>> {
+  class SubscriptionContextFacade
 }
 
-package "profile.interfaces.events" <<External>> {
-  class ProfileUpdatedIntegrationEvent <<record>>
+package "iam.interfaces.events" <<External>> {
+  class UserAccountUpdatedIntegrationEvent <<record>>
 }
 
 package "laboratory.domain.model.valueobjects" {
@@ -247,11 +243,10 @@ package "laboratory.application.internal.eventhandlers" {
 }
 
 StaffAccountSynchronizationEventHandler ..> UserAccountUpdatedIntegrationEvent : e-mail
-StaffAccountSynchronizationEventHandler ..> ProfileUpdatedIntegrationEvent : full name
 StaffAccountSynchronizationEventHandler --> StaffRepository
 note bottom of StaffAccountSynchronizationEventHandler
-  The staff list follows what each person changes:
-  the e-mail of the account (IAM) and the name of the profile.
+  The staff list follows the e-mail of the account (IAM);
+  Profile renames the staff member through the facade.
 end note
 
 LaboratoryRegisteredEventHandler ..> LaboratoryRegisteredEvent
@@ -264,20 +259,28 @@ EnvironmentUpdatedEventHandler ..> EnvironmentUpdatedEvent
 EnvironmentUsageAssignedEventHandler ..> EnvironmentUsageAssignedEvent
 
 package "laboratory.application.internal.outboundservices.acl" {
-  class LaboratoryExternalComplianceService
   class ExternalIamService {
+    + lockLaboratoryAssociation(userId: Long): boolean
+    + assignLaboratory(userId: Long, laboratoryId: Long): void
     + existsAccount(email: String): boolean
     + createAccount(laboratoryId, email, fullName, accessRole): StaffAccount
     + disableAccount(userId: Long): void
+  }
+  class LaboratoryExternalSubscriptionService {
+    + hasActiveSubscription(userId: Long): boolean
+    + assignLaboratory(userId: Long, laboratoryId: Long): void
   }
 }
 
 StaffCommandServiceImpl --> ExternalIamService
 
 ExternalIamService --> IamContextFacade
+LaboratoryExternalSubscriptionService --> SubscriptionContextFacade
+note bottom of LaboratoryExternalSubscriptionService
+  The onboarding of a laboratory associates it with the account
+  of its owner (IAM) and with the active subscription.
+end note
 
-LaboratoryExternalComplianceService --> ComplianceContextFacade
-RawMaterialLowStockEventHandler --> LaboratoryExternalComplianceService
 
 package "laboratory.application.acl" {
   class LaboratoryContextFacadeImpl
@@ -285,8 +288,10 @@ package "laboratory.application.acl" {
 
 package "laboratory.interfaces.acl" {
   interface LaboratoryContextFacade {
+    + findLaboratoryName(laboratoryId: Long): Optional<String>
     + findStaffMember(laboratoryId, staffId): Optional<StaffReference>
     + findStaffMemberByAccount(userId: Long): Optional<StaffReference>
+    + renameStaffMemberByAccount(userId: Long, fullName: String): void
   }
   class StaffReference <<record>> {
     + id: Long
