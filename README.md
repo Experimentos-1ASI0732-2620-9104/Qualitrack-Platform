@@ -15,7 +15,7 @@ REST API of **QualiTrack**, the IoT platform by IoTech for quality management in
 - Stripe for subscription payments
 - PDFBox for PDF generation
 - springdoc-openapi (Swagger UI) for API documentation
-- Docker and GitHub Actions
+- Docker
 
 ## Architecture
 
@@ -23,14 +23,14 @@ The code is organized by bounded context under `com.iotech.qualitrack.platform`.
 
 | Bounded context | Description |
 |-----------------|-------------|
-| `iam` | Identity and access management: sign-in, JWT, roles |
+| `iam` | Identity and access management: sign-in, JWT, roles and Edge Gateway API keys |
 | `profile` | User and staff profiles |
 | `subscription` | Subscription plans and Stripe billing |
 | `laboratory` | Laboratories |
-| `equipment` | Laboratory equipment |
+| `equipment` | Laboratory equipment, IoT devices and Edge Gateways |
 | `inventory` | Inventory |
 | `batch` | Batches |
-| `tracking` | Tracking |
+| `tracking` | Tracking: environmental profiles and telemetry, also synchronized by Edge Gateways |
 | `ca` | Compliance alerts: deviation alerts and notifications |
 | `ra` | Reports and audit: KPI dashboard, audit log and exports |
 | `shared` | Common infrastructure shared by all contexts |
@@ -63,6 +63,8 @@ The API starts on `http://localhost:8080`. With springdoc, the Swagger UI is ava
 mvn test
 ```
 
+The suite has 294 tests: unit tests, integration tests over HTTP with H2 and BDD scenarios with Cucumber.
+
 ### Docker
 
 ```bash
@@ -74,7 +76,7 @@ The image runs with `SPRING_PROFILES_ACTIVE=prod`.
 
 ## Configuration
 
-Profiles live in `src/main/resources`: `application.properties` (shared), `application-dev.properties` and `application-prod.properties`.
+Profiles live in `src/main/resources`: `application.properties` (shared), `application-dev.properties` and `application-prod.properties`. [`.env.example`](.env.example) lists the variables below with example values.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -100,7 +102,9 @@ CORS is applied by `WebSecurityConfiguration` and reads its origins from `applic
 
 ## Deployment
 
-Pushes to `main` trigger the workflow in `.github/workflows/deploy.yml`, which runs the tests, builds the Docker image, pushes it to Azure Container Registry and updates the Azure Container App.
+This repository has no deployment workflow. Build and run the Docker image as shown above.
+
+The production profile keeps `ddl-auto=none`. Before deploying version 1.1.0, create the table `iam_edge_gateway_api_keys` and the indexes `idx_deviation_alerts_open_incident` and `idx_deviation_alerts_environment` on the production database.
 
 ## Branching
 
